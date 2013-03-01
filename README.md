@@ -1,2 +1,3 @@
-ba6-os
-======
+# BA6 - Operating System
+
+Group of Claire, David & Thomas
