@@ -26,15 +26,13 @@ struct builtin {
 int
 builtin_cd(int argc, char **argv)
 {
-	return (argc > 0) ? chdir(argv[0]) : 1;
+	return (argc > 1) ? chdir(argv[1]) : 1;
 }
 
 int
 builtin_exit(int argc, char **argv)
 {
 	/* body of exit builtin command */
-    fclose(stdin);
-
 	/* add your code here */
 	return (0);
 }
@@ -178,16 +176,13 @@ main(void)
 	char line[1000];
 	char *res;
 
-	for (;;) {
+		for (;;) {
 		getcwd(cwd, sizeof(cwd));
 		printf("%s %% ", cwd);
 
-
-        
 		res = fgets(line, sizeof(line), stdin);
 		if (res == NULL)
 			break;
-
 
 		process(line);
 	}
