@@ -26,9 +26,7 @@ struct builtin {
 int
 builtin_cd(int argc, char **argv)
 {
-	/* body of cd builtin command */
-	/* add your code here */
-	return (0);
+	return (argc > 0) ? chdir(argv[0]) : 1;
 }
 
 int
