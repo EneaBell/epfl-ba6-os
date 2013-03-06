@@ -39,7 +39,7 @@ builtin_exit(int argc, char **argv)
 int
 builtin_status(int argc, char **argv)
 {
-	printf("%d", error);
+	fprintf(inout[1], "%d", error);
 	return (0);
 }
 
@@ -63,16 +63,15 @@ run_builtin(char **args)
 {
 	int argc;
 	struct builtin *b;
-
+    
 	for (b = builtins; b->name != NULL; b++) {
 		if (strcmp(b->name, args[0]) == 0) {
-			for (argc = 0; args[argc] != NULL; argc++)
-				/* NOTHING */;
+			for (argc = 0; args[argc] != NULL; argc++);
 			error = b->func(argc, args);
 			return (1);
 		}
 	}
-
+    
 	return (0);
 }
 
@@ -88,15 +87,13 @@ static char* parseword(char **pp)
 {
 	char *p = *pp;
 	char *word;
-
-	for (; isspace(*p); p++)
-		/* NOTHING */;
-
+    
+	for (; isspace(*p); p++);
+    
 	word = p;
-
-	for (; strchr(" \t;&|><\n", *p) == NULL; p++)
-		/* NOTHING */;
-
+    
+	for (; strchr(" \t;&|><\n", *p) == NULL; p++);
+    
 	*pp = p;
 	return (p != word ? word : NULL);
 }
@@ -108,33 +105,34 @@ static void process(char *line)
 	char *args[100], **narg;
 	int pip[2];
 	int fd, mode;
-
+    FILE* pFile;
+    
 	p = line;
-
+    
 newcmd:
 	inout[0] = STDIN_FILENO;
 	inout[1] = STDOUT_FILENO;
-
+    
 newcmd2:
 	narg = args;
 	*narg = NULL;
-
+    
 	for (; *p != 0; p != line && p++) {
 		word = parseword(&p);
-
+        
 		ch = *p;
 		*p = 0;
-
+        
 		/*
-		printf("parseword: '%s', '%c', '%s'\n", word, ch, p + 1);
-		*/
-
+         printf("parseword: '%s', '%c', '%s'\n", word, ch, p + 1);
+         */
+        
 		if (word != NULL) {
 			*narg++ = word;
 			*narg = NULL;
 		}
-
-nextch:
+        
+    nextch:
 		/*
 		 * Here you should put your code for processing the commands
 		 * Up to this point, pointer word points to the next word,
@@ -142,27 +140,43 @@ nextch:
 		 * You should process according to what is in the ch.
 		 * For example, use switch(). Next example will skip whitespaces
 		 * and detect the redirection of the standard output.
-		 *
-
-		switch (ch) {
-		case ' ':
-		case '\t': break;
-		case '>':
-			warn('Ah, we have redirection!');
-			break;
-		case '\n':
-			RUN_COMMAND();
-			break;
-		default:
-		}
-
-		 *
-		 * The previous example is broken in many ways, though,
-		 * so you should not use it verbatim.
-		 *
 		 */
-
-		/* add your code here */
+        
+		switch (ch) {
+			case ' ':
+			case '\t': break;
+			case '>': // cmd > file
+                p++;
+				word = parseword(&p); // file
+                *p = 0;
+                
+				pFile = fopen(word, "w");
+                fprintf(pFile, "salut");
+                fclose(pFile);
+				// run cmd(argc, args)
+				// >> test
+				//builtin_status(0, NULL);
+				// << test
+				
+				// close file
+                //                fflush((FILE*)inout[1]);
+                //				fclose((FILE*)inout[1]);
+				inout[1] = STDOUT_FILENO;
+                
+				warn("Ah, we have redirection!");
+				break;
+                
+			case '<': // cmd < file
+                
+				break;
+			case '\n':
+				//if run_builtin()
+				//RUN_COMMAND();
+				break;
+			default:
+				break;
+		}
+        
 		;
 	}
 }
@@ -173,17 +187,17 @@ main(void)
 	char cwd[MAXPATHLEN+1];
 	char line[1000];
 	char *res;
-
-		for (;;) {
+    
+	for (;;) {
 		getcwd(cwd, sizeof(cwd));
 		printf("%s %% ", cwd);
-
+        
 		res = fgets(line, sizeof(line), stdin);
 		if (res == NULL)
 			break;
-
+        
 		process(line);
 	}
-
+    
 	return (error);
 }
