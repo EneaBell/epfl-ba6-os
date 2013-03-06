@@ -26,20 +26,20 @@ struct builtin {
 int
 builtin_cd(int argc, char **argv)
 {
-	return (argc > 1) ? chdir(argv[1]) : 1;
+	return (argc > 1) ? chdir(argv[1]) : 0;
 }
 
 int
 builtin_exit(int argc, char **argv)
 {
-	fclose(stdin);
-	return (0);
+	exit(error);
+	return (1);
 }
 
 int
 builtin_status(int argc, char **argv)
 {
-	fprintf(inout[1], "%d", error);
+	printf("%d", error);
 	return (0);
 }
 
@@ -75,7 +75,24 @@ run_builtin(char **args)
 	return (0);
 }
 
+static int run_command(char **args)
+{
+    // No command
+    if (args[0] == NULL) {
+        return 0;
+    }
+    
+	if (!run_builtin(args)) {
+        // TODO launch command using exec
+        printf("TODO launch command using exec\n");
+        error = 1;
+    }
+    
+	return 0;
+}
+
 /* add your code here */
+
 
 /*
  * Takes a pointer to a string pointer and advances this string pointer
@@ -105,7 +122,6 @@ static void process(char *line)
 	char *args[100], **narg;
 	int pip[2];
 	int fd, mode;
-    FILE* pFile;
     
 	p = line;
     
@@ -132,52 +148,94 @@ newcmd2:
 			*narg = NULL;
 		}
         
-    nextch:
-		/*
-		 * Here you should put your code for processing the commands
-		 * Up to this point, pointer word points to the next word,
-		 * ch points to the first character after the word
-		 * You should process according to what is in the ch.
-		 * For example, use switch(). Next example will skip whitespaces
-		 * and detect the redirection of the standard output.
-		 */
-        
-		switch (ch) {
-			case ' ':
-			case '\t': break;
-			case '>': // cmd > file
+nextch:
+        switch (ch) {
+            // redirection: cmd > file
+            case '>':
                 p++;
-				word = parseword(&p); // file
+                word = parseword(&p); // file
                 *p = 0;
                 
-				pFile = fopen(word, "w");
-                fprintf(pFile, "salut");
-                fclose(pFile);
-				// run cmd(argc, args)
-				// >> test
-				//builtin_status(0, NULL);
-				// << test
-				
-				// close file
-                //                fflush((FILE*)inout[1]);
-                //				fclose((FILE*)inout[1]);
-				inout[1] = STDOUT_FILENO;
+                // Back up the actual output
+                fd = dup(inout[1]);
                 
-				warn("Ah, we have redirection!");
-				break;
+                inout[1] = open(word, O_WRONLY | O_CREAT, 0666); // TODO Extract mode from cwd
+                dup2(inout[1], STDOUT_FILENO);
+
+                // launch command
+                run_command(args);
+
+                // flush actual stdout
+                fflush(stdout);
                 
-			case '<': // cmd < file
+                // close file
+                close(inout[1]);
                 
-				break;
-			case '\n':
-				//if run_builtin()
-				//RUN_COMMAND();
-				break;
-			default:
-				break;
-		}
-        
-		;
+                // Restore the output
+                dup2(fd, STDOUT_FILENO);
+                inout[1] = fd;
+                break;
+                
+            // redirection: cmd < file
+            case '<':
+                p++;
+                word = parseword(&p); // file
+                *p = 0;
+                
+                // Back up the actual output
+                fd = dup(inout[0]);
+                
+                inout[0] = open(word, O_RDONLY);
+                dup2(inout[0], STDIN_FILENO);
+                
+                // launch command
+                run_command(args);
+                
+                // flush actual stdout
+                fflush(stdout);
+                
+                // close file
+                close(inout[0]);
+                
+                // Restore the output
+                dup2(fd, STDIN_FILENO);
+                inout[0] = fd;
+                break;
+                
+            
+            // pipe: cmd1 | cmd2
+            // conditional execution: cmd1 || cmd2
+            case '|':
+                if (*(p+1) == '|') { // conditional execution: cmd1 || cmd2
+                    // TODO conditional execution OR
+                    
+                } else { // pipe: cmd1 | cmd2
+                    // TODO pipe
+                    
+                }
+                break;
+                
+            // background: cmd1 & cmd2
+            // conditional execution: cmd1 && cmd2
+            case '&':
+                if (*(p+1) == '&') { // conditional execution: cmd1 && cmd2
+                    // TODO conditional execution AND
+                    
+                } else { // background: cmd1 & cmd2
+                    // TODO background execution
+                    
+                }
+                break;
+                
+            case '\n':
+                run_command(args);
+                break;
+            
+            case ' ':
+            case '\t':
+            default:
+                break;
+        }
 	}
 }
 
