@@ -43,7 +43,7 @@ int
 builtin_status(int argc, char **argv)
 {
 	/* body of the status builtin command */
-	/* add your code here */
+	printf("%d", error);
 	return (0);
 }
 
@@ -88,8 +88,7 @@ run_builtin(char **args)
  * Returns a pointer to the beginning of the next word in the string,
  * or NULL if there is no more word available.
  */
-static char *
-parseword(char **pp)
+static char* parseword(char **pp)
 {
 	char *p = *pp;
 	char *word;
@@ -106,8 +105,7 @@ parseword(char **pp)
 	return (p != word ? word : NULL);
 }
 
-static void
-process(char *line)
+static void process(char *line)
 {
 	int ch, ch2;
 	char *p, *word;
