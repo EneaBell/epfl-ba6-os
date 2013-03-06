@@ -33,6 +33,8 @@ int
 builtin_exit(int argc, char **argv)
 {
 	/* body of exit builtin command */
+    fclose(stdin);
+
 	/* add your code here */
 	return (0);
 }
@@ -182,9 +184,12 @@ main(void)
 		getcwd(cwd, sizeof(cwd));
 		printf("%s %% ", cwd);
 
+
+        
 		res = fgets(line, sizeof(line), stdin);
 		if (res == NULL)
 			break;
+
 
 		process(line);
 	}
