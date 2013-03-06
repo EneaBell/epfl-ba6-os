@@ -32,15 +32,13 @@ builtin_cd(int argc, char **argv)
 int
 builtin_exit(int argc, char **argv)
 {
-	/* body of exit builtin command */
-	/* add your code here */
+	fclose(stdin);
 	return (0);
 }
 
 int
 builtin_status(int argc, char **argv)
 {
-	/* body of the status builtin command */
 	printf("%d", error);
 	return (0);
 }
