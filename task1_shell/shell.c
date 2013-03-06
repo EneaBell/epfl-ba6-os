@@ -2,6 +2,7 @@
 #include <sys/fcntl.h>
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 
 #include <err.h>
 #include <stdio.h>
@@ -88,6 +89,23 @@ static int run_command(char **args)
         error = 1;
     }
     
+    fflush(stdout);
+    fflush(stderr);
+    
+    // restore stdout
+    if (inout[1] != STDOUT_FILENO) {
+        dup2(inout[1], STDOUT_FILENO);
+        close(inout[1]);
+        inout[1] = STDOUT_FILENO;
+    }
+    
+    // restore stdin
+    if (inout[0] != STDIN_FILENO) {
+        dup2(inout[0], STDIN_FILENO);
+        close(inout[0]);
+        inout[0] = STDIN_FILENO;
+    }
+    
 	return 0;
 }
 
@@ -126,6 +144,7 @@ static void process(char *line)
 	p = line;
     
 newcmd:
+    // Back up the stdin & stdout
 	inout[0] = STDIN_FILENO;
 	inout[1] = STDOUT_FILENO;
     
@@ -157,24 +176,13 @@ nextch:
                 word = parseword(&p); // file
                 *p = 0;
                 
-                // Back up the actual output
-                fd = dup(inout[1]);
+                // Backup stdout
+                inout[1] = dup(inout[1]);
                 
-                inout[1] = open(word, O_WRONLY | O_CREAT, 0666); // TODO Extract mode from cwd
-                dup2(inout[1], STDOUT_FILENO);
-
-                // launch command
-                run_command(args);
-
-                // flush actual stdout
-                fflush(stdout);
-                
-                // close file
-                close(inout[1]);
-                
-                // Restore the output
+                // TODO Extract mode from cwd
+                // TODO Close fd after
+                fd = open(word, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 dup2(fd, STDOUT_FILENO);
-                inout[1] = fd;
                 break;
                 
             // redirection: cmd < file
@@ -183,24 +191,12 @@ nextch:
                 word = parseword(&p); // file
                 *p = 0;
                 
-                // Back up the actual output
-                fd = dup(inout[0]);
+                // Backup stdin
+                inout[1] = dup(inout[1]);
                 
-                inout[0] = open(word, O_RDONLY);
-                dup2(inout[0], STDIN_FILENO);
-                
-                // launch command
-                run_command(args);
-                
-                // flush actual stdout
-                fflush(stdout);
-                
-                // close file
-                close(inout[0]);
-                
-                // Restore the output
+                // TODO Close fd after
+                fd = open(word, O_RDONLY);
                 dup2(fd, STDIN_FILENO);
-                inout[0] = fd;
                 break;
                 
             
@@ -246,6 +242,9 @@ nextch:
                 break;
         }
 	}
+    
+    // try to run the command
+    run_command(args);
 }
 
 int
