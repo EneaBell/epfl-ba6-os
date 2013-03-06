@@ -136,8 +136,9 @@ newcmd2:
 	for (; *p != 0; p != line && p++) {
 		word = parseword(&p);
         
-		ch = *p;
-		*p = 0;
+		ch  = *p;
+        ch2 = *(p+1);
+		*p  = 0;
         
 		/*
          printf("parseword: '%s', '%c', '%s'\n", word, ch, p + 1);
@@ -206,11 +207,15 @@ nextch:
             // pipe: cmd1 | cmd2
             // conditional execution: cmd1 || cmd2
             case '|':
-                if (*(p+1) == '|') { // conditional execution: cmd1 || cmd2
+                if (ch2 == '|') { // conditional execution: cmd1 || cmd2
+                    ++p; // shift we got all
+                    
                     // TODO conditional execution OR
+                    printf("TODO conditional execution OR\n");
                     
                 } else { // pipe: cmd1 | cmd2
                     // TODO pipe
+                    printf("TODO pipe\n");
                     
                 }
                 break;
@@ -218,11 +223,15 @@ nextch:
             // background: cmd1 & cmd2
             // conditional execution: cmd1 && cmd2
             case '&':
-                if (*(p+1) == '&') { // conditional execution: cmd1 && cmd2
+                if (ch2 == '&') { // conditional execution: cmd1 && cmd2
+                    ++p; // shift we got all
+                    
                     // TODO conditional execution AND
+                    printf("TODO conditional execution AND\n");
                     
                 } else { // background: cmd1 & cmd2
                     // TODO background execution
+                    printf("TODO background execution\n");
                     
                 }
                 break;
