@@ -8,7 +8,12 @@
 //
 //  Versions:
 //      07.03.2013 - 1.0 - Initial release
+//      08.03.2013 - 1.1 - External command
 //
+//
+//  Rule of Thumb:
+//      file_descriptor -> As soon as you dup, you close the old one.
+//      pipe -> If you fork, close the output from the parent side.
 // ------------------------------------------------------------------------ */
 
 #include <sys/wait.h>
@@ -85,8 +90,8 @@ static int run_builtin(char **args)
 	return (0);
 }
 
-static void restore_std() {
-
+static void restore_std()
+{
     fflush(stdout);
     fflush(stderr);
     
@@ -106,24 +111,88 @@ static void restore_std() {
     }
 }
 
-static int run_command(char **args)
+static int run_command2(char **args, int pipe_enable)
 {
+    int fd;
+    int pip[2];
+    int childpid;
+    
     // No command
     if (args[0] == NULL) {
+        restore_std();
         return 0;
     }
     
-	if (!run_builtin(args)) {
-        // TODO launch command using exec
-        printf("TODO launch command (%s) using exec\n", args[0]);
-        error = 1;
+    if (pipe_enable) {
+        if (pipe(pip) != 0) {
+            err(1, "Couldn't open pipe");
+        }
+        
+    } else if (run_builtin(args)) {
+        return 1;
     }
     
-    restore_std();
+    childpid = fork();
+    
+    switch (childpid) {
+        case -1: //
+            err(1, "Unable to fork.");
+            break;
+            
+        case 0: // child: run command and exit
+
+            fflush(stdout);
+            
+            if (pipe_enable && (inout[1] == STDOUT_FILENO)) {
+                fflush(stdout);
+                dup2(pip[1], STDOUT_FILENO);
+                close(pip[1]);
+            }
+            
+            if (!pipe_enable || !run_builtin(args)) {
+                // execvp
+                //   -> v = args inside an array
+                //   -> p = check PATH to find the command
+                execvp(args[0], args);
+                err(1, "Error executing file");
+            }
+    
+            restore_std();
+    
+            fflush(stdout);
+            exit(error);
+            break;
+            
+        default: // parent
+            
+            restore_std();
+            
+            if (pipe_enable) { // run next command and stay alive
+                fd = dup(inout[0]);
+                close(inout[0]);
+                inout[0] = fd;
+                
+                dup2(pip[0], STDIN_FILENO);
+                close(pip[0]);
+                close(pip[1]); // Has to be closed from parent side (rule of thumb)
+                
+            } else { // wait for the child
+                waitpid(childpid, &error, 0);
+            }
+            break;
+    }
     
     *args = NULL;
     
-	return 0;
+	return childpid;
+}
+
+static int run_command(char **args) {
+    return run_command2(args, 0);
+}
+
+static int run_pipe(char **args) {
+    return run_command2(args, 1);
 }
 
 /* add your code here */
@@ -155,18 +224,16 @@ static void process(char *line)
 	int ch, ch2;
 	char *p, *word;
 	char *args[100], **narg;
-	int pip[2];
 	int fd, mode;
-    int childpid;
     
 	p = line;
     
-newcmd:
+//newcmd:
     // Set the standard stdin & stdout
 	inout[0] = STDIN_FILENO;
 	inout[1] = STDOUT_FILENO;
     
-newcmd2:
+//newcmd2:
 	narg = args;
 	*narg = NULL;
     
@@ -186,7 +253,7 @@ newcmd2:
 			*narg = NULL;
 		}
         
-nextch:
+//nextch:
         switch (ch) {
             // redirection: cmd > file
             case '>':
@@ -198,10 +265,10 @@ nextch:
                 inout[1] = dup(inout[1]);
                 
                 // TODO Extract mode from cwd
-                // TODO Close fd after
                 fd = open(word, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (fd < 0) err(1, "%s", word);
                 dup2(fd, STDOUT_FILENO);
+                close(fd);
                 break;
                 
             // redirection: cmd < file
@@ -229,43 +296,11 @@ nextch:
                     printf("TODO conditional execution OR\n");
                     
                 } else { // pipe: child | parent
-
-                    if (pipe(pip) != 0) {
-                        err(1, "Couldn't open pipe");
-                        
-                    } else {
-                        
-                        childpid = fork();
-                        
-                        switch (childpid) {
-                            case -1: //
-                                err(1, "Unable to fork.");
-                                
-                            case 0: // child: run first command and exit
-                                if (inout[1] == STDOUT_FILENO) {
-                                    fflush(stdout);
-                                    dup2(pip[1], STDOUT_FILENO);
-                                }
-                                
-                                run_command(args);
-                                
-                                fflush(stdout);
-                                exit(error);
-                                break;
-                                
-                            default: // parent: run next command and stay alive
-                                restore_std();
-                                
-                                inout[0] = dup(inout[0]);
-                                dup2(pip[0], STDIN_FILENO);
-                                close(pip[0]);
-                                
-                                // reinitialize args
-                                narg = args;
-                                *narg = NULL;
-                                break;
-                        }
-
+                    
+                    if (run_pipe(args) > 0) {
+                        // reinitialize args
+                        narg = args;
+                        *narg = NULL;
                     }
                 }
                 break;
@@ -287,7 +322,11 @@ nextch:
                 break;
                 
             case '\n':
-                run_command(args);
+                if (run_command(args) != 0) {
+                    // reinitialize args
+                    narg = args;
+                    *narg = NULL;
+                }
                 break;
             
             case ' ':
@@ -298,7 +337,11 @@ nextch:
 	}
     
     // if there is still a command to run
-    run_command(args);
+    if (run_command(args) != 0) {
+        // reinitialize args
+        narg = args;
+        *narg = NULL;
+    }
 }
 
 int main(void)
