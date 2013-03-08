@@ -38,7 +38,7 @@ main(int argc, char **argv)
 	for (i = 0; i < runparent; i++) {
 	    printf("Hello from the parent. I have pid %d and my child has %d. i=%d, j=%d\n",
 		   (int)mypid, (int)childpid, i, j);
-	    sleep(5);
+	    sleep(1);
 	}
 	printf("Will now wait for my child\n");
 	waitpid(childpid, &status, 0);
@@ -49,7 +49,7 @@ main(int argc, char **argv)
 	mypid = getpid();
 	for (j = 0; j < runchild; j++) {
 	    printf("Hello from the child. I have pid %d. i=%d, j=%d\n", (int)mypid, i, j);
-	    sleep(5);
+	    sleep(3);
 	}
 	printf("Child is exiting now!\n");
 	return 123;
