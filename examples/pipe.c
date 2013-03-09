@@ -2,16 +2,17 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 
-int
-main(void)
-{
-	int fds[2];
+int main(void) {
+	
+	int fds[2];	
 	char buf[20];
 	size_t len;
 
 	if (pipe(fds) != 0)
 		err(1, "pipe");
+		
 	printf("pipe goes from %d -> %d\n", fds[1], fds[0]);
 
 	if (write(fds[1], "test", 4) != 4)
@@ -19,6 +20,7 @@ main(void)
 
 	memset(buf, 0, sizeof(buf));
 	len = read(fds[0], buf, sizeof(buf) - 1);
+	
 	if ((ssize_t)len == -1)
 		err(1, "read");
 
@@ -34,7 +36,7 @@ main(void)
 
 	printf("read %zd bytes from pipe: %s\n", len, buf);
 
-	close(fds[0]);
+	close(fds[0]); // Only at that point we know that the pipe is gone.
 
 	if (pipe(fds) != 0)
 		err(1, "pipe");

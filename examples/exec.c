@@ -3,9 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 
-int
-main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 	int i;
 	char *style, *cmd, *param;
 
@@ -16,7 +14,7 @@ main(int argc, char **argv)
 
 	if (argc != 4) {
 		fprintf(stderr, "usage: %s style cmd param\n", argv[0]);
-		return (1);
+		return 1;
 	}
 
 	style = argv[1];
@@ -25,9 +23,14 @@ main(int argc, char **argv)
 
 	printf("testing %s\n", style);
 
-	if (strcmp(style, "execl") == 0) {
+	/*
+		"The first argument, by convention, should point to the file name associated with
+		 the file being executed. The list of arguments must be terminated by a NULL pointer."
+	*/
 
-		execl(cmd, cmd, param , NULL);
+	if (strcmp(style, "execl") == 0) {
+		
+		execl(cmd, cmd, param, NULL);
 
 	} else if (strcmp(style, "execv") == 0) {
 		char *args[] = {
@@ -51,9 +54,11 @@ main(int argc, char **argv)
 
 	} else {
 		fprintf(stderr, "unknown style!\n");
-		return (1);
+		return 1;
 	}
 
+
+	// Should never happen.
 	warn("after %s", style);
-	return (1);
+	return 1;
 }

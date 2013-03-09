@@ -16,9 +16,8 @@ static const char *text2 =
 "ccc\n"
 "eee\n";
 
-static void
-readfromfile(int fd)
-{
+static void readfromfile(int fd) {
+	
 	char buf[5];
 
 	memset(buf, 0, sizeof(buf));
@@ -28,11 +27,10 @@ readfromfile(int fd)
 	printf("read from fd %d: %s", fd, buf);
 }
 
-static void
-writetofile(const char *name, const char *text)
-{
+static void writetofile(const char *name, const char *text) {
+	
 	int fd;
-
+	
 	fd = open(name, O_RDWR|O_CREAT, 0666);
 	if (fd < 0)
 		err(1, "open");
@@ -43,9 +41,8 @@ writetofile(const char *name, const char *text)
 	close(fd);
 }
 
-int
-main(void)
-{
+int main(void) {
+	
 	int fd1, fd2;
 	const char *name1 = "/tmp/test1", *name2 = "/tmp/test2";
 
@@ -73,5 +70,5 @@ main(void)
 	readfromfile(fd1);
 	readfromfile(fd2);
 
-	return (0);
+	return 0;
 }

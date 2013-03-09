@@ -4,9 +4,8 @@
 #include <unistd.h>
 #include <stdio.h>
 
-int
-main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
+	
     pid_t childpid, mypid;
     int i, j;
     int status;
@@ -17,7 +16,8 @@ main(int argc, char **argv)
      * process and returns the process ID of the child process to the parent
      * process.  Otherwise, a value of -1 is returned to the parent process, no
      * child process is created, and the global variable errno is set to indi-
-     * cate the error. */
+     * cate the error.
+		 */
 
     if (argc > 1) {
 	    runparent = 6;
@@ -29,29 +29,32 @@ main(int argc, char **argv)
     childpid = fork();
 
     switch (childpid) {
-    case -1:
-	err(1, "fork() failed");
-	/* NOTREACHED */
+	
+    	case -1:
+				err(1, "fork() failed");
+				/* NOT REACHED */
 
-    default:
-	mypid = getpid();
-	for (i = 0; i < runparent; i++) {
-	    printf("Hello from the parent. I have pid %d and my child has %d. i=%d, j=%d\n",
-		   (int)mypid, (int)childpid, i, j);
-	    sleep(1);
-	}
-	printf("Will now wait for my child\n");
-	waitpid(childpid, &status, 0);
-	printf("Child exited with status %d.\n", WEXITSTATUS(status));
-	return 0;
+  		case 0:
+				mypid = getpid();
+				for (j = 0; j < runchild; j++) {
+			    printf("Hello from the child. I have pid %d. i = %d, j = %d\n", (int)mypid, i, j);
+			    sleep(3);
+				}
 
-    case 0:
-	mypid = getpid();
-	for (j = 0; j < runchild; j++) {
-	    printf("Hello from the child. I have pid %d. i=%d, j=%d\n", (int)mypid, i, j);
-	    sleep(3);
-	}
-	printf("Child is exiting now!\n");
-	return 123;
-    }
+				printf("Child is exiting now!\n");
+				return 257;
+
+    	default:
+				mypid = getpid();
+				for (i = 0; i < runparent; i++) {
+				    printf("Hello from the parent. I have pid %d and my child has %d. i = %d, j = %d \n",
+					   (int)mypid, (int)childpid, i, j);
+				    sleep(1);
+				}
+			
+				printf("Will now wait for my child\n");
+				waitpid(childpid, &status, 0);
+				printf("Child exited with status %d.\n", WEXITSTATUS(status));
+				return 0;
+		}
 }

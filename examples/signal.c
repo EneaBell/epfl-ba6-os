@@ -6,32 +6,33 @@
 
 #define MSGLEN 1000
 
-void sig_hdlr(int sig_num)
-{
-    static const char* msgs[] = {
-	"Caught ^C\n",
-	"Caught SIGUSR1\n",
-	"Unknown signal!\n"
-    };
-    const char *msg;
+void sig_hdlr(int sig_num) {
+	
+	static const char* msgs[] = {
+		"Caught ^C\n",
+		"Caught SIGUSR1\n",
+		"Unknown signal!\n"
+  };
 
-    switch(sig_num) {
+  const char *msg;
+
+  switch(sig_num) {
     case SIGINT:
-	msg = msgs[0];
-        break;
+			msg = msgs[0];
+      break;
     case SIGUSR1:
-        msg = msgs[1];
-        break;
+      msg = msgs[1];
+      break;
     default:
-	msg = msgs[2];
-	break;
-    }
+			msg = msgs[2];
+			break;
+  }
 
-    write(STDOUT_FILENO, msg, strlen(msg));
+  write(STDOUT_FILENO, msg, strlen(msg));
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
+	
     pid_t pid;
 
     pid = getpid();

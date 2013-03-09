@@ -39,22 +39,19 @@ struct builtin {
 	const char *name;
 	builtin_cmd func;
 };
+
 #define	BIN(n)	{ #n, builtin_ ## n }
 
-
-int builtin_cd(int argc, char **argv)
-{
+int builtin_cd(int argc, char **argv) {
 	return (argc > 1) ? chdir(argv[1]) : 0;
 }
 
-int builtin_exit(int argc, char **argv)
-{
+int builtin_exit(int argc, char **argv) {
 	exit(error);
 	return (1);
 }
 
-int builtin_status(int argc, char **argv)
-{
+int builtin_status(int argc, char **argv) {
 	printf("%d\n", error);
 	return (0);
 }
@@ -74,8 +71,7 @@ static struct builtin builtins[] = {
  * Returns 0 if it did not manage to find builtin command, or 1 if args
  * contained a builtin command
  */
-static int run_builtin(char **args)
-{
+static int run_builtin(char **args) {
 	int argc;
 	struct builtin *b;
     
@@ -90,8 +86,8 @@ static int run_builtin(char **args)
 	return (0);
 }
 
-static void restore_std()
-{
+static void restore_std() {
+	
     fflush(stdout);
     fflush(stderr);
     
@@ -111,8 +107,8 @@ static void restore_std()
     }
 }
 
-static int run_command2(char **args, int pipe_enable)
-{
+static int run_command2(char **args, int pipe_enable) {
+	
     int fd;
     int pip[2];
     int childpid;
@@ -195,6 +191,14 @@ static int run_pipe(char **args) {
     return run_command2(args, 1);
 }
 
+void quit_process(int sig_no) {
+	char* str = "\r\n";
+	
+	if (sig_no == SIGINT) {
+		write(inout[1], str, strlen(str));
+	}
+}
+
 /* add your code here */
 
 
@@ -227,9 +231,9 @@ static void process(char *line)
 	int fd, mode;
     
 	p = line;
-    
+
 //newcmd:
-    // Set the standard stdin & stdout
+  // Set the standard stdin & stdout
 	inout[0] = STDIN_FILENO;
 	inout[1] = STDOUT_FILENO;
     
@@ -241,18 +245,16 @@ static void process(char *line)
 		word = parseword(&p);
         
 		ch  = *p;
-        ch2 = *(p+1);
+    ch2 = *(p + 1);
 		*p  = 0;
         
-		/*
-         printf("parseword: '%s', '%c', '%s'\n", word, ch, p + 1);
-         */
+		/* printf("parseword: '%s', '%c', '%s'\n", word, ch, p + 1); */
         
 		if (word != NULL) {
 			*narg++ = word;
 			*narg = NULL;
 		}
-        
+    
 //nextch:
         switch (ch) {
             // redirection: cmd > file
@@ -314,10 +316,10 @@ static void process(char *line)
                     // TODO conditional execution AND
                     printf("TODO conditional execution AND\n");
                     
-                } else { // background: cmd1 & cmd2
-                    // TODO background execution
-                    printf("TODO background execution\n");
-                    
+                } else { // background: cmd1 &
+										++p;
+										if (fork() == 0)
+											execvp(args[0], args);
                 }
                 break;
                 
@@ -336,6 +338,11 @@ static void process(char *line)
         }
 	}
     
+		/* 
+			IF THIS IS PRESENT, THE BACKGROUND JOBS DO NOT WORK PROPERLY. 
+			AND IF COMMENTED, THE ^C for the command yes > /dev/null does not work...
+			FUCK YOU THEN PROGRAM :D
+		*/
     // if there is still a command to run
     if (run_command(args) != 0) {
         // reinitialize args
@@ -348,12 +355,15 @@ int main(void)
 {
 	char cwd[MAXPATHLEN+1];
 	char line[1000];
-    char *res;
+  char *res;
     
 	for (;;) {
 		getcwd(cwd, sizeof(cwd));
 		printf("%s %% ", cwd);
-        
+    
+		// Catches ^C and do handler method quit_process(int)
+		signal(SIGINT, &quit_process);
+    
 		res = fgets(line, sizeof(line), stdin);
 		if (res == NULL)
 			break;
