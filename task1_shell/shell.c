@@ -294,8 +294,18 @@ static void process(char *line)
                 if (ch2 == '|') { // conditional execution: cmd1 || cmd2
                     ++p; // shift to pass ch2
                     
-                    // TODO conditional execution OR
-                    printf("TODO conditional execution OR\n");
+                    if (run_command(args) != 0) {
+                        // reinitialize args
+                        narg = args;
+                        *narg = NULL;
+                    }
+                    
+                    // Stop if the previous command succeded
+					if(error == 0) {
+						return;
+					}
+                    
+                 
                     
                 } else { // pipe: child | parent
                     
@@ -312,10 +322,18 @@ static void process(char *line)
             case '&':
                 if (ch2 == '&') { // conditional execution: cmd1 && cmd2
                     ++p; // shift to pass ch2
+                               
+	                if (run_command(args) != 0) {
+                        // reinitialize args
+                        narg = args;
+                        *narg = NULL;
+                    }
                     
-                    // TODO conditional execution AND
-                    printf("TODO conditional execution AND\n");
-                    
+                    // Stop if the previous command returned an error
+					if(error != 0) {
+						return;
+					}
+         
                 } else { // background: cmd1 &
 										++p;
 										if (fork() == 0)
