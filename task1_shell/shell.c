@@ -158,7 +158,7 @@ static int run_command2(char **args, int pipe_enable) {
 				//   -> v = args inside an array
 				//   -> p = check PATH to find the command
 				error = execvp(args[0], args);
-				warn("Error executing command %s", args[0]);
+				warnx("%s: command not found", args[0]);
 			}
 			
 			restore_std();
@@ -350,7 +350,10 @@ static void process_command(char *line)
 					
 				} else { // pipe: child | parent
 					
-					if (run_pipe(args) > 0) {
+					if (*narg == NULL) {
+						warnx("syntax error near unexpected token '|'");
+						
+					} else if (run_pipe(args) > 0) {
 						// reinitialize args
 						narg = args;
 						*narg = NULL;
