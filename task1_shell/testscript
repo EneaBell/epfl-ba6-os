@@ -59,4 +59,4 @@ echo
 echo bar ; false & ; status
 sleep 1 & echo foo
 sleep 2 && echo moo & ; echo bar
-#echo foo > tmp/testout && sleep 4 && echo moo > tmp/testout & sleep 2 && cat < tmp/testout && sleep 6 && cat tmp/testout
+echo foo > tmp/testout && sleep 4 && echo moo > tmp/testout & sleep 2 && cat < tmp/testout && sleep 6 && cat tmp/testout

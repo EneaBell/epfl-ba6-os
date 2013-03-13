@@ -10,6 +10,7 @@
  //      07.03.2013 - 1.0 - Initial release
  //      08.03.2013 - 1.1 - External command
  //      13.03.2013 - 1.2 - Everything but background support
+ //      13.03.2013 - 1.3 - Background + cwd mode
  //
  //
  //  Rule of Thumb:
@@ -111,7 +112,7 @@ static void restore_std() {
 	}
 }
 
-static int run_command2(char **args, int pipe_enable, int wait_enable) {
+static int run_command2(char **args, int pipe_enable) {
 	
 	int fd;
 	int pip[2];
@@ -179,7 +180,7 @@ static int run_command2(char **args, int pipe_enable, int wait_enable) {
 				close(pip[0]);
 				close(pip[1]); // Has to be closed from parent side (rule of thumb)
 				
-			} else if (wait_enable) { // wait for the child
+			} else { // wait for the child
 				waitpid(childpid, &error, 0);
 			}
 			break;
@@ -191,15 +192,11 @@ static int run_command2(char **args, int pipe_enable, int wait_enable) {
 }
 
 static int run_command(char **args) {
-	return run_command2(args, 0, 1);
+	return run_command2(args, FALSE);
 }
 
 static int run_pipe(char **args) {
-	return run_command2(args, 1, 0);
-}
-
-static int run_background(char **args) {
-	return run_command2(args, 0, 0);
+	return run_command2(args, TRUE);
 }
 
 void quit_process(int sig_no) {
@@ -208,6 +205,16 @@ void quit_process(int sig_no) {
 	if (sig_no == SIGINT) {
 		write(inout[1], str, strlen(str));
 	}
+}
+
+mode_t getcwdmode() {
+	struct stat fd_stat;
+	char cwd[MAXPATHLEN+1];
+	
+	getcwd(cwd, sizeof(cwd));
+	stat(cwd, &fd_stat);
+
+	return fd_stat.st_mode;
 }
 
 /*
@@ -236,7 +243,7 @@ static void process_command(char *line)
 	int ch, ch2;
 	char *p, *word, *file;
 	char *args[100], **narg;
-	int fd, mode;
+	int fd;
 	
 	p = line;
 	
@@ -281,7 +288,8 @@ static void process_command(char *line)
 				--p;
 				
 				// TODO Extract mode from cwd
-				fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+				
+				fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, getcwdmode());
 				if (fd < 0) {
 					warn("%s", file);
 					narg = args;
@@ -366,11 +374,14 @@ static void process_command(char *line)
 					conditional_run = error ? FALSE : TRUE;
 					
 				} else { // background: cmd1 &
+					// Something went wrong >_<
+					/*
 					if (run_background(args) != 0) {
 						// reinitialize args
 						narg = args;
 						*narg = NULL;
 					}
+					 */
 				}
 				break;
             
@@ -408,6 +419,46 @@ static void process_command(char *line)
 }
 
 static void process(char *line) {
+	
+	int ch, ch2;
+	char *p;
+	int childpid;
+	
+	// foreach Search (cmd12) & cmd3
+	//		fork
+	//		child -> process_command cmd12
+	//		parent -> clear command
+	//	process_command rest
+
+	for (p = line; *p != 0; ++p) {
+
+		ch  = *p;
+		ch2 = *(p + 1);
+		
+		if ((ch == '&') && (ch2 == '&')) {
+			++p;
+			
+		} else if ((ch == '&') && (ch2 != '&')) {
+			*p = 0;
+			
+			childpid = fork();
+			
+			switch (childpid) {
+				case -1: //
+					err(1, "Unable to fork.");
+					break;
+					
+				case 0:
+					process_command(line);
+					exit(error);
+					
+				default:
+					line = p+1;
+			}
+			
+		}
+	}
+	
 	process_command(line);
 }
 
