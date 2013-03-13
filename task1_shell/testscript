@@ -1,15 +1,22 @@
 # ; is replaced by newline!
 # basics
+echo
+echo Basics
+echo
 echo yo
   echo    yo
     echo    yo    
 echo yo;status
 cd tmp;cat ../testinput
+cd ..
 cat testnotinput;status
 md5 testinput
 false ; status
 ls ; ls . ; ls . . . . ; echo foo ; echo foo bar moz ; echo moz
-# redirection
+## redirection
+echo
+echo Redirection
+echo
 wc < testinput
 echo mamba > tmp/testout
 wc < testinput > tmp/testout
@@ -19,7 +26,10 @@ cat<testinput
 cat      <         testinput        >      tmp/testout
 wc<testinput>tmp/testout
 true; status > tmp/testout
-# pipeline
+## pipeline
+echo
+echo Pipeline
+echo
 wc testinput | cat
 wc testinput | wc | cat
 cat testinput | cat | wc
@@ -27,7 +37,10 @@ cat<testinput|wc
 wc<testinput|md5 >tmp/testout
 cat testinput|md5|md5|md5|md5|md5|md5|md5
 false; status | cat
-# conditional
+## conditional
+echo
+echo Conditional
+echo
 true && echo yo
 true && true && echo yo && echo foo
 echo foo || echo bar
@@ -39,8 +52,11 @@ false && echo foo && echo bar || echo moh && echo muh
 echo foo&&echo bar | md5
 echo foo | md5 && echo moh
 false || echo foo | md5 || echo moh
-# background
+## background
+echo
+echo Background
+echo
 echo bar ; false & ; status
 sleep 1 & echo foo
-sleep 4 && echo moo & ; echo bar
-echo foo > tmp/testout && sleep 4 && echo moo > tmp/testout & sleep 2 && cat < tmp/testout && sleep 6 && cat tmp/testout
+sleep 2 && echo moo & ; echo bar
+#echo foo > tmp/testout && sleep 4 && echo moo > tmp/testout & sleep 2 && cat < tmp/testout && sleep 6 && cat tmp/testout
