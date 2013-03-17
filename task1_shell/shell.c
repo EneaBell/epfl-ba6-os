@@ -11,6 +11,7 @@
  //      08.03.2013 - 1.1 - External command
  //      13.03.2013 - 1.2 - Everything but background support
  //      13.03.2013 - 1.3 - Background + cwd mode
+ //      17.03.2013 - 1.4 - Error message for builtin cd
  //
  //
  //  Rule of Thumb:
@@ -48,7 +49,18 @@ struct builtin {
 #define	BIN(n)	{ #n, builtin_ ## n }
 
 int builtin_cd(int argc, char **argv) {
-	return (argc > 1) ? chdir(argv[1]) : 0;
+	int status;
+	if (argc > 1) {
+		status = chdir(argv[1]);
+		if (status != 0) {
+			warn("%s", argv[1]);
+		}
+	} else {
+		status = 1;
+		warnx("Missing arguments");
+	};
+
+	return status;
 }
 
 int builtin_exit(int argc, char **argv) {
