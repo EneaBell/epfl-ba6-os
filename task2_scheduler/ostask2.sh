@@ -7,9 +7,9 @@ SWAPFS="swap.img"
 
 if [ -z "$1" ]; then
 	echo "usage: make, run, patch"
-	echo "	make [defconfig | clean]	-> Launch Makefile"
-	echo "	run							-> Launch UML VM"
-	echo "	patch						-> Generate the patch file"
+	echo "	make [defconfig | clean]    -> Launch Makefile"
+	echo "	run                         -> Launch UML VM"
+	echo "	patch                       -> Generate the patch file"
 	echo ""
 	echo "Patched files by dummy.patch:"
 	echo "	+ include/linux/init_task.h"
@@ -30,5 +30,8 @@ elif [ $1 = "run" ]; then
 
 elif [ $1 = "patch" ]; then
 	diff -pruN "$LINUX_SRC-dummy" "$LINUX_SRC" > sched.patch
+
+elif [ $1 = "init" ]; then
+	echo "TODO"
 
 fi
