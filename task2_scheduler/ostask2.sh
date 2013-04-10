@@ -1,17 +1,34 @@
 #!/bin/sh
 
+KERNEL_FILE="linux-3.8.3.tar.xz"
+DUMMY_PATCH="dummy.patch"
+SCHED_PATCH="sched.patch"
+
 LINUX_SRC="linux-3.8.3"
-BUILD_PATH="/home/thmx/task2_scheduler"
+BUILD_PATH="~/task2_scheduler"
 ROOTFS="Gentoo-10.0-x86-root_fs"
 SWAPFS="swap.img"
 
+file_exists() {
+	if ! [ -e $1 ]; then
+		echo "File $1 doesn't exist."
+		exit 1
+	fi
+}
+
+if [ `uname` != "Linux" ]; then
+	echo "You need to be under linux to execute this script."
+	exit 1
+fi
+
 if [ -z "$1" ]; then
-	echo "usage: make, run, patch"
+	echo "usage: make, run, patch, init"
 	echo "	make [defconfig | clean]    -> Launch Makefile"
 	echo "	run                         -> Launch UML VM"
 	echo "	patch                       -> Generate the patch file"
+	echo "	init                        -> Unarchive files and dummy patch"
 	echo ""
-	echo "Patched files by dummy.patch:"
+	echo "List of patched files by dummy.patch:"
 	echo "	+ include/linux/init_task.h"
 	echo "	+ include/linux/sched.h"
 	echo "	+ kernel/sched/core.c"
@@ -26,12 +43,28 @@ elif [ $1 = "make" ]; then
 	make ARCH=um O="$BUILD_PATH" $2
 
 elif [ $1 = "run" ]; then
+	file_exists $ROOTFS
+	file_exists $SWAPFS
 	"$BUILD_PATH"/linux ubda="$ROOTFS" ubdb="$SWAPFS" mem=256M con0=fd:0,fd:1 con=pts
 
-elif [ $1 = "patch" ]; then
-	diff -pruN "$LINUX_SRC-dummy" "$LINUX_SRC" > sched.patch
-
 elif [ $1 = "init" ]; then
-	echo "TODO"
+	file_exists "$KERNEL_FILE"
+	file_exists "$DUMMY_PATCH"
+	
+	echo ">> Unarchive kernel (may take some time)"
+	tar -xf "$KERNEL_FILE"
+	
+	echo ">> Patching kernel"
+	cd "$LINUX_SRC"
+	patch -p1 -i ../"$DUMMY_PATCH"
+	cd ..
+	
+	echo ">> Duplicating kernel directory"
+	cp -R "$LINUX_SRC" "$LINUX_SRC-dummy"
+	echo "/!\ Do not touch '$LINUX_SRC-dummy/'... it is the base directory to generate the patch file."
+
+elif [ $1 = "patch" ]; then
+	diff -pruN "$LINUX_SRC-dummy" "$LINUX_SRC" > "$SCHED_PATCH"
 
 fi
+

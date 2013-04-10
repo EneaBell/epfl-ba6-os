@@ -2,9 +2,15 @@
 /linux-3.8.3.tar.xz
 /swap.img
 
-/linux-3.8.3*/
+/linux-3.8.3-dummy/
+
+/linux-3.8.3/*
+/linux-3.8.3/.gitignore
+/linux-3.8.3/.mailmap
+!/linux-3.8.3/include/
 !/linux-3.8.3/include/linux/init_task.h
 !/linux-3.8.3/include/linux/sched.h
+!/linux-3.8.3/kernel/
 !/linux-3.8.3/kernel/sched/core.c
 !/linux-3.8.3/kernel/sched/dummy.c
 !/linux-3.8.3/kernel/sched/fair.c
