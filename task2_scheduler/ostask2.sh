@@ -5,9 +5,9 @@ DUMMY_PATCH="dummy.patch"
 SCHED_PATCH="sched.patch"
 
 LINUX_SRC="linux-3.8.3"
-BUILD_PATH="~/task2_scheduler"
-ROOTFS="Gentoo-10.0-x86-root_fs"
 SWAPFS="swap.img"
+
+source ostask2.config.sh
 
 file_exists() {
 	if ! [ -e $1 ]; then
@@ -45,7 +45,7 @@ elif [ $1 = "make" ]; then
 elif [ $1 = "run" ]; then
 	file_exists $ROOTFS
 	file_exists $SWAPFS
-	"$BUILD_PATH"/linux ubda="$ROOTFS" ubdb="$SWAPFS" mem=256M con0=fd:0,fd:1 con=pts
+	$BUILD_PATH/linux ubda="$ROOTFS" ubdb="$SWAPFS" mem=256M con0=fd:0,fd:1 con=pts
 
 elif [ $1 = "init" ]; then
 	file_exists "$KERNEL_FILE"

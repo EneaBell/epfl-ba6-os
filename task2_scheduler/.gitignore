@@ -1,9 +1,10 @@
 /Gentoo-10.0-x86-root_fs
+/Debian-Wheezy-AMD64-root_fs
 /linux-3.8.3.tar.xz
 /swap.img
+/ostask2.config.sh
 
 /linux-3.8.3-dummy/
-
 /linux-3.8.3/*
 /linux-3.8.3/.gitignore
 /linux-3.8.3/.mailmap
