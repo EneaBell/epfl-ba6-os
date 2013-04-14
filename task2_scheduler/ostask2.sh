@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 KERNEL_FILE="linux-3.8.3.tar.xz"
 DUMMY_PATCH="dummy.patch"

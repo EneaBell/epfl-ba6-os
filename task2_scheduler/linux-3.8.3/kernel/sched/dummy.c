@@ -75,8 +75,9 @@ static void yield_task_dummy(struct rq *rq)
 {
 }
 
-static void check_preempt_curr_dummy(struct rq *rq, struct task_struct *p, int flags)
-{
+static void check_preempt_curr_dummy(struct rq *rq, struct task_struct *p, int flags) {
+	if (p->prio < rq->curr->prio)
+		resched_task(rq->curr);
 }
 
 static struct task_struct *pick_next_task_dummy(struct rq *rq)
@@ -100,24 +101,45 @@ static void set_curr_task_dummy(struct rq *rq)
 {
 }
 
-static void task_tick_dummy(struct rq *rq, struct task_struct *curr, int queued)
-{
+static void task_tick_dummy(struct rq *rq, struct task_struct *curr, int queued) {
+  
 }
 
-static void switched_from_dummy(struct rq *rq, struct task_struct *p)
-{
+/*
+ * Called when the scheduling class changes (due to the change in priority).
+ */
+static void switched_from_dummy(struct rq *rq, struct task_struct *p) {
+  
 }
 
-static void switched_to_dummy(struct rq *rq, struct task_struct *p)
-{
+/*
+ * Called when the scheduling class changes (due to the change in priority).
+ */
+static void switched_to_dummy(struct rq *rq, struct task_struct *p) {
+  
+  if (!p->on_rq) return;
+  
+	if (rq->curr == p)
+		resched_task(rq->curr); // Why reschedule here????
+	else
+		check_preempt_curr_dummy(rq, p, 0);
 }
 
-static void prio_changed_dummy(struct rq *rq, struct task_struct *p, int oldprio)
-{
+/*
+ * Called when the priority changes, but NOT the scheduling class (rt_mutex_setprio, sched_setscheduler).
+ */
+static void prio_changed_dummy(struct rq *rq, struct task_struct *p, int oldprio) {
+  
+	if (!p->on_rq) return;                    // If the given task is not in our list, quit.
+  
+  if (rq->curr == p) {                      // If the given task in parameter is running
+		if (p->prio > oldprio) resched_task(p); // If we have a higher priority with the given task, we reschedule it.
+  } else                                    // If not running, check if its value is greater than the current running task.
+		check_preempt_curr_dummy(rq, p, 0);
+  
 }
 
-static unsigned int get_rr_interval_dummy(struct rq *rq, struct task_struct *p)
-{
+static unsigned int get_rr_interval_dummy(struct rq *rq, struct task_struct *p) {
 	return get_timeslice();
 }
 
