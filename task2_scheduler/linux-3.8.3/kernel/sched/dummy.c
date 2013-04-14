@@ -76,8 +76,8 @@ static void yield_task_dummy(struct rq *rq)
 }
 
 static void check_preempt_curr_dummy(struct rq *rq, struct task_struct *p, int flags) {
-	if (p->prio < rq->curr->prio)
-		resched_task(rq->curr);
+  // If the current task is less important than p, we ask to put p on the processor.
+	if (p->prio > rq->curr->prio) resched_task(p);
 }
 
 static struct task_struct *pick_next_task_dummy(struct rq *rq)
@@ -119,8 +119,12 @@ static void switched_to_dummy(struct rq *rq, struct task_struct *p) {
   
   if (!p->on_rq) return;
   
+  /*
+   * kick off the schedule if running, otherwise just see
+   * if we can still preempt the current task.
+   */
 	if (rq->curr == p)
-		resched_task(rq->curr); // Why reschedule here????
+		resched_task(rq->curr);
 	else
 		check_preempt_curr_dummy(rq, p, 0);
 }
@@ -133,10 +137,9 @@ static void prio_changed_dummy(struct rq *rq, struct task_struct *p, int oldprio
 	if (!p->on_rq) return;                    // If the given task is not in our list, quit.
   
   if (rq->curr == p) {                      // If the given task in parameter is running
-		if (p->prio > oldprio) resched_task(p); // If we have a higher priority with the given task, we reschedule it.
+		if (p->prio > oldprio) resched_task(p); // If we have a higher priority with the given task, we kick out the one currently using the processor and we put the new one in place.
   } else                                    // If not running, check if its value is greater than the current running task.
-		check_preempt_curr_dummy(rq, p, 0);
-  
+		check_preempt_curr_dummy(rq, p, 0); 
 }
 
 static unsigned int get_rr_interval_dummy(struct rq *rq, struct task_struct *p) {
