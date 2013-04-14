@@ -45,14 +45,14 @@ static inline struct task_struct *dummy_task_of(struct sched_dummy_entity *dummy
 static inline void _enqueue_task_dummy(struct rq *rq, struct task_struct *p)
 {
 	struct sched_dummy_entity *dummy_se = &p->dummy_se;
-        struct list_head *queue = &rq->dummy.queue;
-        list_add_tail(&dummy_se->run_list, queue);
+	struct list_head *queue = &rq->dummy.queue;
+	list_add_tail(&dummy_se->run_list, queue);
 }
 
 static inline void _dequeue_task_dummy(struct task_struct *p)
 {
 	struct sched_dummy_entity *dummy_se = &p->dummy_se;
-        list_del_init(&dummy_se->run_list);
+	list_del_init(&dummy_se->run_list);
 }
 
 /*
@@ -73,10 +73,13 @@ static void dequeue_task_dummy(struct rq *rq, struct task_struct *p, int flags)
 
 static void yield_task_dummy(struct rq *rq)
 {
+	printk("Sched_Dummy: yield_task_dummy()\n");
+	resched_task(rq->curr);
 }
 
 static void check_preempt_curr_dummy(struct rq *rq, struct task_struct *p, int flags) {
-  // If the current task is less important than p, we ask to put p on the processor.
+	printk("Sched_Dummy: check_preempt_curr_dummy()\n");
+	// If the current task is less important than p, we ask to put p on the processor.
 	if (p->prio > rq->curr->prio) resched_task(p);
 }
 
@@ -95,14 +98,20 @@ static struct task_struct *pick_next_task_dummy(struct rq *rq)
 
 static void put_prev_task_dummy(struct rq *rq, struct task_struct *prev)
 {
+	printk("Sched_Dummy: put_prev_task_dummy(%p)\n", prev);
+	enqueue_task_dummy(rq, prev, 0);
 }
 
 static void set_curr_task_dummy(struct rq *rq)
 {
+	printk("Sched_Dummy: set_curr_task_dummy()\n");
+	dequeue_task_dummy(rq, rq->curr, 0);
 }
 
-static void task_tick_dummy(struct rq *rq, struct task_struct *curr, int queued) {
-  
+static void task_tick_dummy(struct rq *rq, struct task_struct *curr, int queued)
+{
+	printk("Sched_Dummy: task_tick_dummy(%p, %u)\n", curr, queued);
+	resched_task(rq->curr);
 }
 
 /*
@@ -117,12 +126,12 @@ static void switched_from_dummy(struct rq *rq, struct task_struct *p) {
  */
 static void switched_to_dummy(struct rq *rq, struct task_struct *p) {
   
-  if (!p->on_rq) return;
+	if (!p->on_rq) return;
   
-  /*
-   * kick off the schedule if running, otherwise just see
-   * if we can still preempt the current task.
-   */
+	/*
+	 * kick off the schedule if running, otherwise just see
+	 * if we can still preempt the current task.
+	 */
 	if (rq->curr == p)
 		resched_task(rq->curr);
 	else
@@ -136,9 +145,9 @@ static void prio_changed_dummy(struct rq *rq, struct task_struct *p, int oldprio
   
 	if (!p->on_rq) return;                    // If the given task is not in our list, quit.
   
-  if (rq->curr == p) {                      // If the given task in parameter is running
+	if (rq->curr == p) {                      // If the given task in parameter is running
 		if (p->prio > oldprio) resched_task(p); // If we have a higher priority with the given task, we kick out the one currently using the processor and we put the new one in place.
-  } else                                    // If not running, check if its value is greater than the current running task.
+	} else                                    // If not running, check if its value is greater than the current running task.
 		check_preempt_curr_dummy(rq, p, 0); 
 }
 
@@ -151,7 +160,7 @@ static unsigned int get_rr_interval_dummy(struct rq *rq, struct task_struct *p) 
  */
 
 const struct sched_class dummy_sched_class = {
-	.next		    = &idle_sched_class,
+	.next		    	= &idle_sched_class,
 	.enqueue_task       = enqueue_task_dummy,
 	.dequeue_task       = dequeue_task_dummy,
 	.yield_task         = yield_task_dummy,
