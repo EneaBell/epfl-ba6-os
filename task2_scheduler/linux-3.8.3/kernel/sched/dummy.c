@@ -118,7 +118,7 @@ static void task_tick_dummy(struct rq *rq, struct task_struct *curr, int queued)
  * Called when the scheduling class changes (due to the change in priority).
  */
 static void switched_from_dummy(struct rq *rq, struct task_struct *p) {
-  
+  // Nothing to do in our case.
 }
 
 /*
@@ -128,13 +128,9 @@ static void switched_to_dummy(struct rq *rq, struct task_struct *p) {
   
 	if (!p->on_rq) return;
   
-	/*
-	 * kick off the schedule if running, otherwise just see
-	 * if we can still preempt the current task.
-	 */
-	if (rq->curr == p)
+	if (rq->curr == p)                // If the task that is from another scheduling class is running, kick it.
 		resched_task(rq->curr);
-	else
+	else                              // Otherwise, check if the task has a better priority than the currently running task.
 		check_preempt_curr_dummy(rq, p, 0);
 }
 
