@@ -7,7 +7,7 @@ SCHED_PATCH="sched.patch"
 LINUX_SRC="linux-3.8.3"
 SWAPFS="swap.img"
 
-source ostask2.config.sh
+source ./"ostask2.config.sh"
 
 file_exists() {
 	if ! [ -e $1 ]; then
