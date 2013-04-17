@@ -363,7 +363,7 @@ static void process_command(char *line)
 				} else { // pipe: child | parent
 					
 					if (*narg == NULL) {
-						warnx("syntax error near unexpected token '|'");
+						//warnx("syntax error near unexpected token '|'");
 						
 					} else if (run_pipe(args) > 0) {
 						// reinitialize args
