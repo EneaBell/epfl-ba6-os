@@ -323,8 +323,13 @@ struct rt_rq {
 #endif
 };
 
+#define DUMMY_PRIORITY_MIN 135
+#define DUMMY_PRIORITY_MAX 139
+#define DUMMY_QUEUE_SIZE 5
+
 struct dummy_rq {
-	struct list_head queue;
+	struct list_head queues[DUMMY_QUEUE_SIZE];
+	unsigned int dummy_timeslice;
 };
 
 #ifdef CONFIG_SMP
