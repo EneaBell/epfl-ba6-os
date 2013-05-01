@@ -1,0 +1,7 @@
+
+# FUSE WebSite
+	- http://fuse.sourceforge.net/
+
+# FUSE for OSX
+	- http://osxfuse.github.io/
+	- Il faut installer ça sur OS X ^_^
