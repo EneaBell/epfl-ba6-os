@@ -75,6 +75,7 @@ struct vfat_direntry {
 #define VFAT_ATTR_LFN	0xf
 #define VFAT_ATTR_INVAL	(0x80|0x40|0x08)
 
+// LFN stands for Long File Name!!!
 struct vfat_direntry_lfn {
 	uint8_t		seq;
 	uint16_t	name1[5];
@@ -93,7 +94,16 @@ struct vfat_direntry_lfn {
 struct vfat {
 	const char	*dev;
 	int		fs;
+  
 	/* XXX add your code here */
+  
+  // Contains the boot sector, as well as the FS Information Sector and the last reserved sectors.
+  // it is the FAT header that contains useful informations about the partition.
+  struct vfat_super* boot_sector;
+  
+  // TODO : Do we store the root directory and the FAT's in here?
+  // struct vfat_dir* root_directory;
+  
 };
 
 struct vfat_search_data {
@@ -110,10 +120,8 @@ gid_t mount_gid;
 time_t mount_time;
 size_t pagesize;
 
-
-static void
-vfat_init(const char *dev)
-{
+static void vfat_init(const char *dev) {
+  
 	iconv_utf16 = iconv_open("utf-8", "utf-16");
 	mount_uid = getuid();
 	mount_gid = getgid();
@@ -124,13 +132,102 @@ vfat_init(const char *dev)
 		err(1, "open(%s)", dev);
 
 	/* XXX add your code here */
+  
+  f->dev = dev;
+  
+  // Creates the boot sector.
+  if ((f->boot_sector = malloc(sizeof(struct vfat_super))) == NULL) {
+    printf("Memory allocation problem number 2.\n");
+    return -1;
+  }
+  
+  // Gets the boot sector from the FAT partition.
+  read(f->fs, f->boot_sector, sizeof(*f->boot_sector));
+  
+  printf("\n***********Filesystem useful statistics: ***********\n");
+  printf("\n");
+  printf("\tbytes_per_sector : %d \n", f->boot_sector->bytes_per_sector);
+  printf("\tsectors_per_cluster : %d \n", f->boot_sector->sectors_per_cluster);
+  printf("\tsectors_per_fat : %d \n", f->boot_sector->sectors_per_fat);
+  printf("\tnumber of clusters per fat : %d \n", f->boot_sector->sectors_per_fat / f->boot_sector->sectors_per_cluster);
+  printf("\ttotal number of clusters : %d \n", 2 * (f->boot_sector->sectors_per_fat / f->boot_sector->sectors_per_cluster));
+    printf("\treserved_sectors : %d \n", f->boot_sector->reserved_sectors);
+  printf("\n****************************************************\n");
+    
+  int buffer_size = 0;
+  
+  // Skips the reserved sectors...
+  void* reservedSectors = NULL;
+  buffer_size = f->boot_sector->bytes_per_sector * f->boot_sector->reserved_sectors;
+  if ((reservedSectors = malloc(buffer_size)) == NULL) return -1;
+  read(f->fs, reservedSectors, buffer_size);
+  
+  // Skips the two FAT partitions for now...
+  void* fileAllocationTables = NULL;
+  buffer_size = 2 * f->boot_sector->bytes_per_sector * f->boot_sector->sectors_per_fat;
+  if ((fileAllocationTables = malloc(buffer_size)) == NULL) return -1;
+  read(f->fs, fileAllocationTables, buffer_size);
+  
+  // Then do the actual fetching for the root directory.
+  printf("\n*********** Listing root directory: ***********\n");
+  
+  struct vfat_direntry record;
+  unsigned char* firstByte = &record;
+  
+  do {
+    
+    // Gets the record from the FAT partition.
+    read(f->fs, &record, sizeof(record));
+    
+    printf("\tname : %s ", record.nameext);
+    
+    switch(record.attr) {
+      case 0x01:
+        printf("\t(Read only file) ");
+        break;
+      case 0x02:
+        printf("\t(Hidden file) ");
+        break;
+      case VFAT_ATTR_DIR:
+        printf("\t(FOLDER) ");
+        break;
+      case 0x20:
+        printf("\t(ARCHIVE) ");
+        break;
+      case 0x0F:
+        printf("\t(VFAT LONG FILENAME) ");
+        break;
+      default:
+        printf("\tattr : 0x%X ", record.attr);
+    }
+    
+    firstByte = &record;    
+    if (*firstByte == 0x0) continue;
+    switch(*firstByte) {
+      case 0x2E:
+        printf(" (DOT entry!)\n");
+        break;
+      case 0xE5:
+        printf(" (DELETED!)\n");
+        break;
+      default:
+        printf("\n");
+    }
+    
+  } while (*firstByte != 0x0);
+  printf("\n**********************************************\n");
+  
+  // End of the program.
+  printf("\nFreeing the memory...\n");
+  free(reservedSectors);
+  free(fileAllocationTables);
+  free(f->boot_sector);
 }
 
 /* XXX add your code here */
 
-static int
-vfat_readdir(/* XXX add your code here, */fuse_fill_dir_t filler, void *fillerdata)
-{
+static int vfat_readdir(/* XXX add your code here, */fuse_fill_dir_t filler, void *fillerdata) {
+  
 	struct stat st;
 	void *buf = NULL;
 	struct vfat_direntry *e;
@@ -144,9 +241,8 @@ vfat_readdir(/* XXX add your code here, */fuse_fill_dir_t filler, void *fillerda
 	/* XXX add your code here */
 }
 
-static int
-vfat_search_entry(void *data, const char *name, const struct stat *st, off_t offs)
-{
+static int vfat_search_entry(void *data, const char *name, const struct stat *st, off_t offs) {
+  
 	struct vfat_search_data *sd = data;
 
 	if (strcmp(sd->name, name) != 0)
@@ -158,41 +254,37 @@ vfat_search_entry(void *data, const char *name, const struct stat *st, off_t off
 	return (1);
 }
 
-static int
-vfat_resolve(const char *path, struct stat *st)
-{
+static int vfat_resolve(const char *path, struct stat *st) {
+  
 	struct vfat_search_data sd;
-
+  
 	/* XXX add your code here */
 }
 
-static int
-vfat_fuse_getattr(const char *path, struct stat *st)
-{
+static int vfat_fuse_getattr(const char *path, struct stat *st) {
+  
+  // TODO : Get the file from the given path.
+	int res = lstat(path, st); // Gets informations on the file at path *path and returns a stat structure in st.
+  
+  // From man 2 stat : 
+  // On success, zero is returned. On error, -1 is returned, and errno is set appropriately.
+  return (res == -1) ? -errno : st; // By Fuse convention, we should always return a negative value for the error.
+}
+
+static int vfat_fuse_readdir(const char *path, void *data, fuse_fill_dir_t filler, off_t offs, struct fuse_file_info *fi) {
 	/* XXX add your code here */
 }
 
-static int
-vfat_fuse_readdir(const char *path, void *data,
-		  fuse_fill_dir_t filler, off_t offs, struct fuse_file_info *fi)
-{
+static int vfat_fuse_read(const char *path, char *buf, size_t size, off_t offs, struct fuse_file_info *fi) {
 	/* XXX add your code here */
 }
 
-static int
-vfat_fuse_read(const char *path, char *buf, size_t size, off_t offs,
-	       struct fuse_file_info *fi)
-{
-	/* XXX add your code here */
-}
-
-static int
-vfat_opt_args(void *data, const char *arg, int key, struct fuse_args *oargs)
-{
+static int vfat_opt_args(void *data, const char *arg, int key, struct fuse_args *oargs) {
 	if (key == FUSE_OPT_KEY_NONOPT && !f->dev) {
 		f->dev = strdup(arg);
 		return (0);
 	}
+  
 	return (1);
 }
 
@@ -202,16 +294,23 @@ static struct fuse_operations vfat_ops = {
 	.read = vfat_fuse_read,
 };
 
-int
-main(int argc, char **argv)
-{
-	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-
-	fuse_opt_parse(&args, NULL, NULL, vfat_opt_args);
-
-	if (!f->dev)
-		errx(1, "missing file system parameter");
-
-	vfat_init(f->dev);
-	return (fuse_main(args.argc, args.argv, &vfat_ops, NULL));
+int main(int argc, char **argv) {
+  
+  printf("Starting the program...\n");
+  
+  struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+  fuse_opt_parse(&args, NULL, NULL, vfat_opt_args);
+  
+  if (!f->dev)
+    errx(1, "missing file system parameter");
+  
+  printf("Init filesystem...\n");
+  
+  vfat_init(f->dev);
+  
+  printf("init has been performed.\n");
+  
+  fflush(stdout);
+  
+  // return (fuse_main(args.argc, args.argv, &vfat_ops, NULL));
 }
