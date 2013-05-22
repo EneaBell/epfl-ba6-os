@@ -112,7 +112,9 @@ struct vfat_search_data {
 	struct stat	*st;
 };
 
+// This is the thing we'll be working with as soon as we have to access the FAT partition.
 struct vfat vfat_info, *f = &vfat_info;
+
 iconv_t iconv_utf16;
 
 uid_t mount_uid;
@@ -142,7 +144,7 @@ static void vfat_init(const char *dev) {
   }
   
   // Gets the boot sector from the FAT partition.
-  read(f->fs, f->boot_sector, sizeof(*f->boot_sector));
+  pread(f->fs, f->boot_sector, sizeof(*f->boot_sector), 0);
   
   printf("\n***********Filesystem useful statistics: ***********\n");
   printf("\n");
@@ -151,22 +153,8 @@ static void vfat_init(const char *dev) {
   printf("\tsectors_per_fat : %d \n", f->boot_sector->sectors_per_fat);
   printf("\tnumber of clusters per fat : %d \n", f->boot_sector->sectors_per_fat / f->boot_sector->sectors_per_cluster);
   printf("\ttotal number of clusters : %d \n", 2 * (f->boot_sector->sectors_per_fat / f->boot_sector->sectors_per_cluster));
-    printf("\treserved_sectors : %d \n", f->boot_sector->reserved_sectors);
+  printf("\treserved_sectors : %d \n", f->boot_sector->reserved_sectors);
   printf("\n****************************************************\n");
-    
-  int buffer_size = 0;
-  
-  // Skips the reserved sectors...
-  void* reservedSectors = NULL;
-  buffer_size = f->boot_sector->bytes_per_sector * f->boot_sector->reserved_sectors;
-  if ((reservedSectors = malloc(buffer_size)) == NULL) return -1;
-  read(f->fs, reservedSectors, buffer_size);
-  
-  // Skips the two FAT partitions for now...
-  void* fileAllocationTables = NULL;
-  buffer_size = 2 * f->boot_sector->bytes_per_sector * f->boot_sector->sectors_per_fat;
-  if ((fileAllocationTables = malloc(buffer_size)) == NULL) return -1;
-  read(f->fs, fileAllocationTables, buffer_size);
   
   // Then do the actual fetching for the root directory.
   printf("\n*********** Listing root directory: ***********\n");
@@ -174,12 +162,32 @@ static void vfat_init(const char *dev) {
   struct vfat_direntry record;
   unsigned char* firstByte = &record;
   
+  /*
+   *  Gives the address of the first file in the root directory (! In Logical Block Addressing, not in sectors nor bytes !).
+   *  To access any particular cluster, you need to use this formula to turn the cluster number into the LBA address for the IDE    *  drive:
+   *  
+   *  lba_addr = cluster_begin_lba + (cluster_number - 2) * sectors_per_cluster;
+  */
+  int cluster_begin_lba = f->boot_sector->reserved_sectors + f->boot_sector->sectors_per_fat * f->boot_sector->fat_count;
+  
+  int i = 7;
   do {
     
     // Gets the record from the FAT partition.
-    read(f->fs, &record, sizeof(record));
+    pread(f->fs, &record, sizeof(record), (cluster_begin_lba * f->boot_sector->bytes_per_sector + (i * sizeof(record))));
     
-    printf("\tname : %s ", record.nameext);
+    printf("\tname : %s \tcluster_hi : %d, cluster_lo : %d\n", record.nameext, record.cluster_hi, record.cluster_lo);
+    
+    // TEST
+    int nextFATCluster = 0, test = 261, count = 0;
+    while (nextFATCluster != 0xFFFFFFF && test != 0xFFFFFFF) {
+      nextFATCluster = test;
+      printf("\tsubfile : %X \n", test);
+      pread(f->fs, &test, sizeof(test), f->boot_sector->reserved_sectors * f->boot_sector->bytes_per_sector + test * 4);
+      count++;
+    }
+    
+    printf("COUNT : %d\n", count);
     
     switch(record.attr) {
       case 0x01:
@@ -214,13 +222,15 @@ static void vfat_init(const char *dev) {
         printf("\n");
     }
     
+    i += 1;
+    
   } while (*firstByte != 0x0);
   printf("\n**********************************************\n");
   
   // End of the program.
   printf("\nFreeing the memory...\n");
-  free(reservedSectors);
-  free(fileAllocationTables);
+  // free(reservedSectors);
+  // free(fileAllocationTables);
   free(f->boot_sector);
 }
 
