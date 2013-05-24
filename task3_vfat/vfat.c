@@ -410,10 +410,8 @@ static const char *hello_path = "/hello";
  * The 'st_ino' field is ignored except if the 'use_ino' mount option is given.
  */
 static int vfat_fuse_getattr(const char *path, struct stat *st) {
-	/*
-	int res = lstat(path, st);
-	return (res == -1) ? -errno : 0;
-	*/
+
+	printf("vfat_fuse_getattr(path -> %s)\n", path);
 
 	int res = 0;
 
@@ -615,7 +613,7 @@ static void vfat_test_read_all() {
 				printf("(Archive) ");
 				break;
 			case VFAT_ATTR_LFN:
-				printf("(VFAT Long Name) ");
+				printf("(VFAT Long Name)\n");
 				i++;
 				continue;
 			default:
@@ -626,7 +624,7 @@ static void vfat_test_read_all() {
 		printf("\tname : %.8s.%.3s \n", record.DIR_Name, record.DIR_Ext);
 
 		// TODO Check that formula
-		uint32_t cluster = ((0xFFFF & record.DIR_FstClusHI) << 16) + (0xFFFF & record.DIR_FstClusLO);
+		uint32_t cluster = ((0xFFFF & record.DIR_FstClusHI) << 16) | (0xFFFF & record.DIR_FstClusLO);
 		printf("\tcluster entry : 0x%08X\n", cluster);
 
 		if (!isFree) {
@@ -635,8 +633,6 @@ static void vfat_test_read_all() {
 				printf("\tclusters :\n");
 				int count = 0;
 				while (!IS_EOC(cluster)) {
-					//uint32_t offset = bs->BPB_RsvdSecCnt * bs->BPB_BytsPerSec + nextFATCluster * sizeof(uint32_t);
-
 					int clusterOffset = (bs->BPB_RsvdSecCnt * bs->BPB_BytsPerSec) + (cluster * sizeof(uint32_t));
 					int sectorOffset = bs->BPB_BytsPerSec * ComputeFirstSectorOfCluster(cluster) + 1;
 					printf("\t\t" "0x%08X\toffset : 0x%08X -> 0x%08X\n", cluster, clusterOffset, sectorOffset);
