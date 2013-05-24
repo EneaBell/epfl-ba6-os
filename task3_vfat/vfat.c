@@ -144,9 +144,9 @@ struct vfat {
 
 	// struct vfat_super* sectors[4];
 	
-	// TODO : Do we store the root directory and the FAT's in here?
-	// struct vfat_dir* root_directory;
-	
+  struct vfat_direntry currentDirentry;
+  uint32_t currentClusterNumber;
+  uint32_t nextClusterNumber;
 };
 
 #define ComputeFirstSectorOfCluster(N)	(f->FirstDataSector + ((N - 2) * f->boot_sector->BPB_SecPerClus))
@@ -481,6 +481,26 @@ static int vfat_fuse_open(const char *path, struct fuse_file_info *fi) {
 	return 0;
 }
 
+static int get_next_cluster_number() {
+  
+  struct vfat_direntry record = f->currentDirentry;
+  
+  printf("f->currentClusterNumber : %d\n", f->currentClusterNumber);
+  
+	if (f->currentClusterNumber > 0 && !IS_EOC(f->currentClusterNumber)) {
+		int clusterOffset = (f->boot_sector->BPB_RsvdSecCnt * f->boot_sector->BPB_BytsPerSec) + (f->currentClusterNumber * sizeof(uint32_t));
+		int sectorOffset = f->boot_sector->BPB_BytsPerSec * ComputeFirstSectorOfCluster(f->currentClusterNumber) + 1;
+		pread(f->fs, &f->nextClusterNumber, sizeof(uint32_t), clusterOffset);
+		f->nextClusterNumber &= 0x0FFFFFFF;
+	} else {
+    return -1;
+  }
+  
+  f->currentClusterNumber = f->nextClusterNumber;
+  
+  return 0;
+}
+
 /*
  * Read data from an open file
  *
@@ -489,11 +509,39 @@ static int vfat_fuse_open(const char *path, struct fuse_file_info *fi) {
  * case the return value of the read system call will reflect the return value of this operation.
  * 
  * Changed in version 2.2
+ *
+ *
+ * struct fuse_file_info {
+ *    int 	           flags
+ *    unsigned long    fh_old
+ *    int 	           writepage
+ *    unsigned int     direct_io: 1
+ *    unsigned int     keep_cache: 1
+ *    unsigned int     flush: 1
+ *    unsigned int     nonseekable: 1
+ *    unsigned int     padding: 27
+ *    uint64_t 	       fh
+ *    uint64_t 	       lock_owner
+ * }
+ * 
  */
 static int vfat_fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-	
+  
+  /********* TEST **********/
+	uint32_t direntry_offset = 0x000FDCC0;
+	pread(f->fs, &f->currentDirentry, sizeof(f->currentDirentry), direntry_offset);
+  /****** END OF TEST ******/
+  
+	f->currentClusterNumber = ((0xFFFF & f->currentDirentry.DIR_FstClusHI) << 16) | (0xFFFF & f->currentDirentry.DIR_FstClusLO);
+  
 	printf("vfat_fuse_read(path -> %s, size -> %d, offset -> %d)\n", path, size, offset);
-	
+  printf("BEFORE : f->currentClusterNumber = %d and f->nextClusterNumber = %d \n", f->currentClusterNumber, f->nextClusterNumber);
+	printf("get_next_cluster_number() = 0x%X\n", get_next_cluster_number());
+  printf("AFTER : f->currentClusterNumber = %d and f->nextClusterNumber = %d \n", f->currentClusterNumber, f->nextClusterNumber);
+  
+	printf("get_next_cluster_number() = 0x%X\n", get_next_cluster_number());
+  printf("AFTER : f->currentClusterNumber = %d and f->nextClusterNumber = %d \n", f->currentClusterNumber, f->nextClusterNumber);
+  
 	/* XXX add your code here */
 
 	size_t len;
@@ -627,9 +675,8 @@ static void vfat_test_read_all() {
 		uint32_t cluster = ((0xFFFF & record.DIR_FstClusHI) << 16) | (0xFFFF & record.DIR_FstClusLO);
 		printf("\tcluster entry : 0x%08X\n", cluster);
 
-		if (!isFree) {
-			// Test
-			if (cluster > 0) {
+		// if (!isFree) {
+      // if (cluster > 0) {
 				printf("\tclusters :\n");
 				int count = 0;
 				while (!IS_EOC(cluster)) {
@@ -642,10 +689,9 @@ static void vfat_test_read_all() {
 				}
 
 				printf("\tcount : %d\n", count);
-			} else {
-				printf("\tcount : Empty file\n");
-			}
-		}
+      // } else {
+      //   printf("\tcount : Empty file\n");
+      // }
 		
 		printf("\t-----------\n");
 		
