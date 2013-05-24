@@ -33,6 +33,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <ctype.h>
+
 // Changed to fit with the Microsoft FAT32 File System Specification
 struct vfat_super {
 	uint8_t		BS_jmpBoot[3];		// res1[3];
@@ -69,6 +71,7 @@ struct vfat_super {
 #define VFAT_SIGNATURE	0xAA55
 #define VFAT_EOC		0x0FFFFFF8
 
+// Changed to fit with the Microsoft FAT32 File System Specification
 struct vfat_direntry {
 	union {
 		struct {
@@ -287,6 +290,257 @@ static void vfat_init(const char *dev) {
 	*/
 }
 
+/* XXX add your code here */
+
+// http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
+size_t trimwhitespace(char *out, size_t len, const char *str)
+{
+	if(len == 0) return 0;
+
+	const char *end;
+	size_t out_size;
+
+	// Trim leading space
+	while(isspace(*str)) str++;
+
+	if(*str == 0) { // All spaces?
+		*out = 0;
+		return 1;
+	}
+
+	// Trim trailing space
+	end = str + strlen(str) - 1;
+	while(end > str && isspace(*end)) end--;
+	end++;
+
+	// Set output size to minimum of trimmed string length and buffer size minus 1
+	out_size = (end - str) < len-1 ? (end - str) : len-1;
+
+	// Copy trimmed string and add null terminator
+	memcpy(out, str, out_size);
+	out[out_size] = 0;
+
+	return out_size;
+}
+
+
+void split_path_file(char** p, char** f, char *pf) {
+    char *slash = pf, *next;
+    while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
+    if (pf != slash) slash++;
+    *p = strndup(pf, slash - pf);
+    *f = strdup(slash);
+}
+
+// http://stackoverflow.com/questions/1575278/function-to-split-a-filepath-into-path-and-file
+void split_path_file_old(char** p, char** f, char *pf) {
+    char *slash = pf, *next;
+    while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
+    if (pf != slash) slash++;
+    *p = strndup(pf, slash - pf);
+    *f = strdup(slash);
+}
+
+// http://en.wikipedia.org/wiki/File_Allocation_Table#VFAT_long_file_names
+uint8_t lfn_checksum(const unsigned char *pFCBName) {
+	int i;
+	uint8_t sum = 0;
+ 
+	for (i = 11; i; i--) {
+		sum = ((sum & 1) << 7) + (sum >> 1) + *pFCBName++;
+	}
+
+	return sum;
+}
+
+static int vfat_readdir(void *fillerdata, fuse_fill_dir_t filler /* XXX add your code here, */) {
+	
+	struct stat st;
+	void *buf = NULL;
+	struct vfat_direntry *e;
+	char *name;
+
+	memset(&st, 0, sizeof(st));
+	st.st_uid = mount_uid;
+	st.st_gid = mount_gid;
+	st.st_nlink = 1;
+
+	printf("vfat_readdir\n");
+
+	/* XXX add your code here */
+
+	return 1;
+}
+
+static int vfat_search_entry(void *data, const char *name, const struct stat *st, off_t offs) {
+	
+	struct vfat_search_data *sd = data;
+
+	if (strcmp(sd->name, name) != 0)
+		return 0;
+
+	sd->found = 1;
+	*sd->st = *st;
+
+	return 1;
+}
+
+static int vfat_resolve(const char *path, struct stat *st) {
+	
+	struct vfat_search_data sd;
+	
+	/* XXX add your code here */
+
+	/*
+	if (vfat_search_entry(sd, "abc", st, 0)) {
+
+	}
+	*/
+
+	return 1;
+}
+
+static const char *hello_str = "Hello World!\n";
+static const char *hello_path = "/hello";
+
+/*
+ * Get file attributes.
+ *
+ * Similar to stat(). The 'st_dev' and 'st_blksize' fields are ignored.
+ * The 'st_ino' field is ignored except if the 'use_ino' mount option is given.
+ */
+static int vfat_fuse_getattr(const char *path, struct stat *st) {
+	/*
+	int res = lstat(path, st);
+	return (res == -1) ? -errno : 0;
+	*/
+
+	int res = 0;
+
+	memset(st, 0, sizeof(struct stat));
+	if (strcmp(path, "/") == 0) {
+		st->st_mode = S_IFDIR | 0755;
+		st->st_nlink = 2;
+
+	} else if (strcmp(path, hello_path) == 0) {
+		st->st_mode = S_IFREG | 0444;
+		st->st_nlink = 1;
+		st->st_size = strlen(hello_str);
+
+	} else {
+		res = -ENOENT;
+	}
+
+	return res;
+}
+
+/*
+ * Read directory
+ * 
+ * This supersedes the old getdir() interface. New applications should use this.
+ * The filesystem may choose between two modes of operation:
+ * 1) The readdir implementation ignores the offset parameter, and passes zero to the filler function's offset.
+ * The filler function will not return '1' (unless an error happens), so the whole directory is read in a single
+ * readdir operation. This works just like the old getdir() method.
+ * 
+ * 2) The readdir implementation keeps track of the offsets of the directory entries. It uses the offset parameter
+ * and always passes non-zero offset to the filler function. When the buffer is full (or an error happens) the filler
+ * function will return '1'.
+ * 
+ * Introduced in version 2.3
+*/
+static int vfat_fuse_readdir(const char *path, void *data, fuse_fill_dir_t filler, off_t offs, struct fuse_file_info *fi) {
+
+	printf("vfat_fuse_readdir(path -> %s)\n", path);
+
+	(void) offs;
+	(void) fi;
+
+	if (strcmp(path, "/") != 0)
+		return -ENOENT;
+
+	filler(data, ".", NULL, 0);
+	filler(data, "..", NULL, 0);
+	filler(data, hello_path + 1, NULL, 0);
+
+	return 0;
+	
+	/* XXX add your code here */
+
+	//vfat_readdir(data, filler)
+
+	//return 0;
+}
+
+
+static int vfat_fuse_open(const char *path, struct fuse_file_info *fi) {
+	if (strcmp(path, hello_path) != 0)
+		return -ENOENT;
+
+	if ((fi->flags & 3) != O_RDONLY)
+		return -EACCES;
+
+	return 0;
+}
+
+/*
+ * Read data from an open file
+ *
+ * Read should return exactly the number of bytes requested except on EOF or error, otherwise the rest of the data
+ * will be substituted with zeroes. An exception to this is when the 'direct_io' mount option is specified, in which
+ * case the return value of the read system call will reflect the return value of this operation.
+ * 
+ * Changed in version 2.2
+ */
+static int vfat_fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+	
+	printf("vfat_fuse_read(path -> %s, size -> %d, offset -> %d)\n", path, size, offset);
+	
+	/* XXX add your code here */
+
+	size_t len;
+	(void) fi;
+	if(strcmp(path, hello_path) != 0) {
+		return -ENOENT;
+	}
+
+	len = strlen(hello_str);
+	if (offset < len) {
+		if (offset + size > len)
+			size = len - offset;
+		memcpy(buf, hello_str + offset, size);
+	} else
+		size = 0;
+
+	return size;
+}
+
+static int vfat_opt_args(void *data, const char *arg, int key, struct fuse_args *oargs) {
+	
+	if (key == FUSE_OPT_KEY_NONOPT && !f->dev) {
+		f->dev = strdup(arg);
+		return 0;
+	}
+	
+	return 1;
+}
+
+static struct fuse_operations vfat_ops = {
+	.getattr 	= vfat_fuse_getattr,
+	.readdir 	= vfat_fuse_readdir,
+	.read 		= vfat_fuse_read,
+	.open 		= vfat_fuse_open
+};
+
+
+
+
+
+
+
+
+
+
 static void vfat_test_read_all() {
 
 	struct vfat_super *bs = f->boot_sector;
@@ -411,118 +665,30 @@ static void vfat_test_read_all() {
 	free(f->boot_sector);
 }
 
-/* XXX add your code here */
 
-static int vfat_readdir(/* XXX add your code here, */fuse_fill_dir_t filler, void *fillerdata) {
-	
-	struct stat st;
-	void *buf = NULL;
-	struct vfat_direntry *e;
-	char *name;
 
-	memset(&st, 0, sizeof(st));
-	st.st_uid = mount_uid;
-	st.st_gid = mount_gid;
-	st.st_nlink = 1;
 
-	/* XXX add your code here */
 
-}
 
-static int vfat_search_entry(void *data, const char *name, const struct stat *st, off_t offs) {
-	
-	struct vfat_search_data *sd = data;
 
-	if (strcmp(sd->name, name) != 0)
-		return 0;
 
-	sd->found = 1;
-	*sd->st = *st;
 
-	return 1;
-}
 
-static int vfat_resolve(const char *path, struct stat *st) {
-	
-	struct vfat_search_data sd;
-	
-	/* XXX add your code here */
 
-	return 0;
-}
 
-/*
- * Get file attributes.
- *
- * Similar to stat(). The 'st_dev' and 'st_blksize' fields are ignored.
- * The 'st_ino' field is ignored except if the 'use_ino' mount option is given.
- */
-static int vfat_fuse_getattr(const char *path, struct stat *st) {
-	
-	// TODO : Get the file from the given path.
-	int res = lstat(path, st); // Gets informations on the file at path *path and returns a stat structure in st.
-	
-	// From man 2 stat : 
-	// On success, zero is returned. On error, -1 is returned, and errno is set appropriately.
-	return (res == -1) ? -errno : st; // By Fuse convention, we should always return a negative value for the error.
-}
 
-/*
- * Read directory
- * 
- * This supersedes the old getdir() interface. New applications should use this.
- * The filesystem may choose between two modes of operation:
- * 1) The readdir implementation ignores the offset parameter, and passes zero to the filler function's offset.
- * The filler function will not return '1' (unless an error happens), so the whole directory is read in a single
- * readdir operation. This works just like the old getdir() method.
- * 
- * 2) The readdir implementation keeps track of the offsets of the directory entries. It uses the offset parameter
- * and always passes non-zero offset to the filler function. When the buffer is full (or an error happens) the filler
- * function will return '1'.
- * 
- * Introduced in version 2.3
-*/
-static int vfat_fuse_readdir(const char *path, void *data, fuse_fill_dir_t filler, off_t offs, struct fuse_file_info *fi) {
-	
-	/* XXX add your code here */
-
-	return 0;
-}
-
-/*
- * Read data from an open file
- *
- * Read should return exactly the number of bytes requested except on EOF or error, otherwise the rest of the data
- * will be substituted with zeroes. An exception to this is when the 'direct_io' mount option is specified, in which
- * case the return value of the read system call will reflect the return value of this operation.
- * 
- * Changed in version 2.2
- */
-static int vfat_fuse_read(const char *path, char *buf, size_t size, off_t offs, struct fuse_file_info *fi) {
-	
-	/* XXX add your code here */
-
-	return 0;
-}
-
-static int vfat_opt_args(void *data, const char *arg, int key, struct fuse_args *oargs) {
-	
-	if (key == FUSE_OPT_KEY_NONOPT && !f->dev) {
-		f->dev = strdup(arg);
-		return 0;
-	}
-	
-	return 1;
-}
-
-static struct fuse_operations vfat_ops = {
-	.getattr 	= vfat_fuse_getattr,
-	.readdir 	= vfat_fuse_readdir,
-	.read 		= vfat_fuse_read
-};
 
 int main(int argc, char **argv) {
+
+	// void split_path_file(char** p, char** f, char *pf) {
+
+	char* path[] = "/abc/def";
+	char* file[]
+	split_path_file(path, file);
+
+	return 0;
 	
+	/*
 	printf("Starting the program...\n");
 	
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -542,8 +708,8 @@ int main(int argc, char **argv) {
 	
 	fflush(stdout);
 	
-	return 0;
-	//return fuse_main(args.argc, args.argv, &vfat_ops, NULL);
+	return fuse_main(args.argc, args.argv, &vfat_ops, NULL);
+	*/
 }
 
 /* ---------------------------------------------------------------------------

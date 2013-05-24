@@ -5,3 +5,9 @@
 # FUSE for OSX
 	- http://osxfuse.github.io/
 	- Il faut installer ça sur OS X ^_^
+
+# URLs
+	- http://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201001/homework/fuse/fuse_doc.html
+	- http://www.c-jump.com/CIS24/Slides/FAT/lecture.html
+	- http://www.pjrc.com/tech/8051/ide/fat32.html
+	- http://en.wikipedia.org/wiki/File_Allocation_Table
