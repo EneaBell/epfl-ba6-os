@@ -105,6 +105,8 @@ struct vfat_direntry {
 #define VFAT_ATTR_DIRECTORY		0x10
 #define VFAT_ATTR_ARCHIVE		0x20
 
+#define VFAT_IS_ATTR(attr, y)	(((attr) & (y)) == (y))
+
 #define VFAT_ATTR_LFN			(VFAT_ATTR_READ_ONLY | VFAT_ATTR_HIDDEN | VFAT_ATTR_SYSTEM | VFAT_ATTR_VOLUME_ID)
 #define VFAT_ATTR_LFN_MASK		(VFAT_ATTR_READ_ONLY | VFAT_ATTR_HIDDEN | VFAT_ATTR_SYSTEM | VFAT_ATTR_VOLUME_ID | VFAT_ATTR_DIRECTORY | VFAT_ATTR_ARCHIVE)
 
@@ -121,9 +123,16 @@ struct vfat_direntry_lfn {
 } __attribute__ ((__packed__));
 // sizeof(struct vfat_direntry_lfn) = 32bytes
 
+#define VFAT_DIRENTRY_CLUSTER(record) (((0xFFFF & record.DIR_FstClusHI) << 16) | (0xFFFF & record.DIR_FstClusLO))
+
 #define VFAT_LFN_SEQ_START		0x40
 #define VFAT_LFN_SEQ_DELETED	0x80
 #define VFAT_LFN_SEQ_MASK		0x3F
+
+struct list_direntry {
+	struct vfat_direntry *direntry;
+	struct list_direntry *next;
+};
 
 struct vfat {
 	const char	*dev;
@@ -142,11 +151,14 @@ struct vfat {
 	uint32_t DataSec;
 	uint32_t CountOfClusters;
 
-	// struct vfat_super* sectors[4];
+	struct list_direntry *root_direntries_list;
+	struct list_direntry *current_direntries_list;
+
+	struct vfat_direntry *current_direntry;
 	
-  struct vfat_direntry currentDirentry;
-  uint32_t currentClusterNumber;
-  uint32_t nextClusterNumber;
+	struct vfat_direntry currentDirentry;
+	uint32_t currentClusterNumber;
+	uint32_t nextClusterNumber;
 };
 
 #define ComputeFirstSectorOfCluster(N)	(f->FirstDataSector + ((N - 2) * f->boot_sector->BPB_SecPerClus))
@@ -290,55 +302,137 @@ static void vfat_init(const char *dev) {
 	*/
 }
 
+static char* trim_string(char* str) {
+	int i;
+	for (i = strlen(str)-1; i >= 0 && str[i] == ' '; --i) str[i] = 0;
+	return str;
+}
+
+static char* trim_nstr(char* str, int n) {
+	int i;
+	for (i = n-1; i >= 0 && str[i] == ' '; --i) str[i] = 0;
+	return str;
+}
+
+static void vfat_read_root_directory() {
+
+	f->root_direntries_list = NULL;
+
+	struct vfat_super *bs = f->boot_sector;
+
+	uint32_t cluster_begin_lba = ComputeFirstSectorOfCluster(bs->BPB_RootClus);
+
+	printf("cluster_begin_lba -> 0x%08X\n", cluster_begin_lba);
+
+	struct list_direntry *old = NULL;
+	struct list_direntry *current = malloc(sizeof(struct list_direntry));
+	f->root_direntries_list = current;
+
+	unsigned char* firstByte = 0;
+	uint32_t direntry_offset = cluster_begin_lba * bs->BPB_BytsPerSec;
+	do {
+		struct vfat_direntry *record = malloc(sizeof(struct vfat_direntry));
+		
+		//printf("\tdirentry_offset -> %08X\n", direntry_offset);
+		pread(f->fs, record, sizeof(struct vfat_direntry), direntry_offset);
+
+		firstByte = (unsigned char*) record;
+		switch(*firstByte) {
+			case VFAT_DIRNAME_NULL:
+			case VFAT_DIRNAME_FREE:
+				free(record);
+				direntry_offset += sizeof(struct vfat_direntry);
+				continue;
+		}
+
+		switch(record->DIR_Attr) {
+			case VFAT_ATTR_LFN:
+				free(record);
+				direntry_offset += sizeof(struct vfat_direntry);
+				continue;
+		}
+
+		struct list_direntry *next = malloc(sizeof(struct list_direntry));
+		current->direntry = record;
+		current->next = next;
+		old = current;
+		current = next;
+
+		printf("\tname : %s.%s \n", trim_nstr(record->DIR_Name, 8), trim_nstr(record->DIR_Ext, 3));
+
+		direntry_offset += sizeof(struct vfat_direntry);
+		
+	} while (*firstByte != 0x0);
+
+	free(old->next);
+	old->next = NULL;
+}
+
+
+static void vfat_read_directory() {
+
+	struct vfat_super *bs = f->boot_sector;
+
+	uint32_t cluster_begin_lba = ComputeFirstSectorOfCluster(bs->BPB_RootClus);
+
+	printf("cluster_begin_lba -> 0x%08X\n", cluster_begin_lba);
+
+	struct list_direntry *current = malloc(sizeof(struct list_direntry));
+	f->root_direntries_list = current;
+
+	unsigned char* firstByte = 0;
+	uint32_t direntry_offset = cluster_begin_lba * bs->BPB_BytsPerSec;
+	do {
+		struct vfat_direntry *record = malloc(sizeof(struct vfat_direntry));
+		
+		//printf("\tdirentry_offset -> %08X\n", direntry_offset);
+		pread(f->fs, record, sizeof(struct vfat_direntry), direntry_offset);
+
+		firstByte = (unsigned char*) record;
+		switch(*firstByte) {
+			case VFAT_DIRNAME_NULL:
+			case VFAT_DIRNAME_FREE:
+				free(record);
+				direntry_offset += sizeof(struct vfat_direntry);
+				continue;
+		}
+
+		switch(record->DIR_Attr) {
+			case VFAT_ATTR_LFN:
+				free(record);
+				direntry_offset += sizeof(struct vfat_direntry);
+				continue;
+		}
+
+		struct list_direntry *next = malloc(sizeof(struct list_direntry));
+
+		printf("\tname : %s.%s \n", trim_nstr(record->DIR_Name, 8), trim_nstr(record->DIR_Ext, 3));
+
+		current->direntry = record;
+		current->next = next;
+
+		current = next;
+
+		direntry_offset += sizeof(struct vfat_direntry);
+		
+	} while (*firstByte != 0x0);
+}
+
+
+
+
+
+
+
+
 /* XXX add your code here */
 
-// http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
-size_t trimwhitespace(char *out, size_t len, const char *str)
-{
-	if(len == 0) return 0;
-
-	const char *end;
-	size_t out_size;
-
-	// Trim leading space
-	while(isspace(*str)) str++;
-
-	if(*str == 0) { // All spaces?
-		*out = 0;
-		return 1;
-	}
-
-	// Trim trailing space
-	end = str + strlen(str) - 1;
-	while(end > str && isspace(*end)) end--;
-	end++;
-
-	// Set output size to minimum of trimmed string length and buffer size minus 1
-	out_size = (end - str) < len-1 ? (end - str) : len-1;
-
-	// Copy trimmed string and add null terminator
-	memcpy(out, str, out_size);
-	out[out_size] = 0;
-
-	return out_size;
-}
-
-
-void split_path_file(char** p, char** f, char *pf) {
-    char *slash = pf, *next;
-    while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
-    if (pf != slash) slash++;
-    *p = strndup(pf, slash - pf);
-    *f = strdup(slash);
-}
-
-// http://stackoverflow.com/questions/1575278/function-to-split-a-filepath-into-path-and-file
-void split_path_file_old(char** p, char** f, char *pf) {
-    char *slash = pf, *next;
-    while ((next = strpbrk(slash + 1, "\\/"))) slash = next;
-    if (pf != slash) slash++;
-    *p = strndup(pf, slash - pf);
-    *f = strdup(slash);
+void split_path_root(char** path, char** head) {
+	if (**path && (**path == '/')) ++(*path); // skip root /
+	*head = *path;
+	while (**path && (**path != '/')) ++(*path);
+	**path = 0;
+	(*path)++;
 }
 
 // http://en.wikipedia.org/wiki/File_Allocation_Table#VFAT_long_file_names
@@ -353,7 +447,7 @@ uint8_t lfn_checksum(const unsigned char *pFCBName) {
 	return sum;
 }
 
-static int vfat_readdir(void *fillerdata, fuse_fill_dir_t filler /* XXX add your code here, */) {
+static int vfat_readdir(void *data, fuse_fill_dir_t filler /* XXX add your code here, */) {
 	
 	struct stat st;
 	void *buf = NULL;
@@ -369,7 +463,21 @@ static int vfat_readdir(void *fillerdata, fuse_fill_dir_t filler /* XXX add your
 
 	/* XXX add your code here */
 
-	return 1;
+	filler(data, ".", NULL, 0);
+	filler(data, "..", NULL, 0);
+	struct list_direntry *it = f->current_direntries_list;
+	while (it != NULL) {
+		printf("vfat_readdir -> it->next = %p\n", it->next);
+		fflush(stdout);
+
+		char* name = calloc(8, sizeof(char));
+		strncpy(name, it->direntry->DIR_Name, 8);
+		printf("vfat_readdir -> name = %s\n", name);
+		filler(data, trim_nstr(name, 8), NULL, 0);
+		it = it->next;
+	}
+
+	return 0;
 }
 
 static int vfat_search_entry(void *data, const char *name, const struct stat *st, off_t offs) {
@@ -385,19 +493,60 @@ static int vfat_search_entry(void *data, const char *name, const struct stat *st
 	return 1;
 }
 
-static int vfat_resolve(const char *path, struct stat *st) {
+static int vfat_resolve_dir(char *path, struct stat *st) {
+
+	// Empty
+	if (strlen(path) == 0) return 1;
+
+	struct vfat_super *bs = f->boot_sector;
+
+	char* head;
+
+	split_path_root(&path, &head);
+	printf("head -> %s, path -> %s\n", head, path);
+
+	// Read that shit
+	
+	struct list_direntry *it = f->current_direntries_list;
+	while (it != NULL) {
+		if (strcmp(head, it->direntry->DIR_Name)) {
+			f->current_direntry = it->direntry;
+
+			if (f->current_direntry->DIR_Attr == VFAT_ATTR_DIRECTORY) {
+
+				vfat_read_directory();
+
+				return vfat_resolve_dir(path, st);
+
+			} else {
+				return strlen(path) == 0; // Not a directory -> the tail path should be empty
+			}
+		}
+		it = it->next;
+	}
+
+	return 0; // Not Found
+}
+
+
+static int vfat_resolve(const char *path_cst, struct stat *st) {
 	
 	struct vfat_search_data sd;
-	
-	/* XXX add your code here */
 
-	/*
-	if (vfat_search_entry(sd, "abc", st, 0)) {
+	char* path = calloc(strlen(path_cst) + 1, sizeof(char));
+	strcpy(path, path_cst);
 
-	}
-	*/
+	// Skip if empty
+	if (strlen(path) == 0) return 1;
 
-	return 1;
+	// Skip root /
+	if (*path && (*path == '/')) ++path;
+
+	// Put back to root directory
+	f->current_direntries_list = f->root_direntries_list;
+
+	return 0;
+	//return vfat_resolve_dir(path, st);
 }
 
 static const char *hello_str = "Hello World!\n";
@@ -419,17 +568,36 @@ static int vfat_fuse_getattr(const char *path, struct stat *st) {
 	if (strcmp(path, "/") == 0) {
 		st->st_mode = S_IFDIR | 0755;
 		st->st_nlink = 2;
-
 	} else if (strcmp(path, hello_path) == 0) {
 		st->st_mode = S_IFREG | 0444;
 		st->st_nlink = 1;
 		st->st_size = strlen(hello_str);
-
-	} else {
+	} else
 		res = -ENOENT;
-	}
 
 	return res;
+
+	/*
+	vfat_resolve(path, st);
+
+	memset(st, 0, sizeof(struct stat));
+	if (strcmp(path, "/") == 0) {
+		st->st_mode = S_IFDIR | 0755;
+		st->st_nlink = 2;
+	} else {
+		while (it != NULL) {
+			if (strcmp(head, it->direntry->DIR_Name)) {
+				st->st_mode = S_IFREG | 0444;
+				st->st_nlink = 1;
+				st->st_size = it->direntry->DIR_FileSize;
+				return 0;
+			}
+			it = it->next;
+		}
+	}
+	*/
+
+	return -ENOENT;
 }
 
 /*
@@ -456,30 +624,16 @@ static int vfat_fuse_readdir(const char *path, void *data, fuse_fill_dir_t fille
 
 	if (strcmp(path, "/") != 0)
 		return -ENOENT;
-
-	filler(data, ".", NULL, 0);
-	filler(data, "..", NULL, 0);
-	filler(data, hello_path + 1, NULL, 0);
-
-	return 0;
 	
 	/* XXX add your code here */
 
-	//vfat_readdir(data, filler)
-
-	//return 0;
-}
-
-
-static int vfat_fuse_open(const char *path, struct fuse_file_info *fi) {
-	if (strcmp(path, hello_path) != 0)
-		return -ENOENT;
-
-	if ((fi->flags & 3) != O_RDONLY)
-		return -EACCES;
+	struct stat st;
+	vfat_resolve(path, &st);
+	vfat_readdir(data, filler);
 
 	return 0;
 }
+
 
 static int get_next_cluster_number() {
   
@@ -530,7 +684,7 @@ static int vfat_fuse_read(const char *path, char *buf, size_t size, off_t offset
   if (offset >= size) return -1;                          // If the offset is bigger than the size, we quit.
 
   /********* TEST : Instead of using resolve **********/
-  uint32_t direntry_offset = 0x000FDC40;
+  uint32_t direntry_offset = 0x000FDC20;
   pread(f->fs, &f->currentDirentry, sizeof(f->currentDirentry), direntry_offset);
   f->nextClusterNumber = ((0xFFFF & f->currentDirentry.DIR_FstClusHI) << 16) | (0xFFFF & f->currentDirentry.DIR_FstClusLO);
     f->currentClusterNumber = f->nextClusterNumber;
@@ -594,15 +748,8 @@ static int vfat_opt_args(void *data, const char *arg, int key, struct fuse_args 
 static struct fuse_operations vfat_ops = {
 	.getattr 	= vfat_fuse_getattr,
 	.readdir 	= vfat_fuse_readdir,
-	.read 		= vfat_fuse_read,
-	.open 		= vfat_fuse_open
+	.read 		= vfat_fuse_read
 };
-
-
-
-
-
-
 
 
 
@@ -719,16 +866,9 @@ static void vfat_test_read_all() {
 		
 	} while (*firstByte != 0x0);
 	printf("\n**********************************************\n");
+	
+	// End of the program.
 }
-
-
-
-
-
-
-
-
-
 
 
 
@@ -748,8 +888,12 @@ int main(int argc, char **argv) {
 	printf("Init filesystem...\n");
 	
 	vfat_init(f->dev);
+	vfat_read_root_directory();
 
-	vfat_test_read_all();
+	//static char* path_const = "/home/thmx/abc";
+	//vfat_resolve(path_const, NULL);
+
+	//vfat_test_read_all();
 	
 	printf("init has been performed.\n");
 	
