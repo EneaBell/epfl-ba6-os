@@ -483,20 +483,18 @@ static int vfat_fuse_open(const char *path, struct fuse_file_info *fi) {
 
 static int get_next_cluster_number() {
   
-  struct vfat_direntry record = f->currentDirentry;
-  
-  printf("f->currentClusterNumber : %d\n", f->currentClusterNumber);
+  f->currentClusterNumber = f->nextClusterNumber;
   
 	if (f->currentClusterNumber > 0 && !IS_EOC(f->currentClusterNumber)) {
 		int clusterOffset = (f->boot_sector->BPB_RsvdSecCnt * f->boot_sector->BPB_BytsPerSec) + (f->currentClusterNumber * sizeof(uint32_t));
-		int sectorOffset = f->boot_sector->BPB_BytsPerSec * ComputeFirstSectorOfCluster(f->currentClusterNumber) + 1;
+		int sectorOffset = f->boot_sector->BPB_BytsPerSec * ComputeFirstSectorOfCluster(f->currentClusterNumber);
 		pread(f->fs, &f->nextClusterNumber, sizeof(uint32_t), clusterOffset);
 		f->nextClusterNumber &= 0x0FFFFFFF;
 	} else {
+    f->currentClusterNumber = -1;
+    f->nextClusterNumber = -1;
     return -1;
   }
-  
-  f->currentClusterNumber = f->nextClusterNumber;
   
   return 0;
 }
@@ -527,38 +525,60 @@ static int get_next_cluster_number() {
  */
 static int vfat_fuse_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
   
-  /********* TEST **********/
-	uint32_t direntry_offset = 0x000FDCC0;
-	pread(f->fs, &f->currentDirentry, sizeof(f->currentDirentry), direntry_offset);
-  /****** END OF TEST ******/
-  
-	f->currentClusterNumber = ((0xFFFF & f->currentDirentry.DIR_FstClusHI) << 16) | (0xFFFF & f->currentDirentry.DIR_FstClusLO);
-  
-	printf("vfat_fuse_read(path -> %s, size -> %d, offset -> %d)\n", path, size, offset);
-  printf("BEFORE : f->currentClusterNumber = %d and f->nextClusterNumber = %d \n", f->currentClusterNumber, f->nextClusterNumber);
-	printf("get_next_cluster_number() = 0x%X\n", get_next_cluster_number());
-  printf("AFTER : f->currentClusterNumber = %d and f->nextClusterNumber = %d \n", f->currentClusterNumber, f->nextClusterNumber);
-  
-	printf("get_next_cluster_number() = 0x%X\n", get_next_cluster_number());
-  printf("AFTER : f->currentClusterNumber = %d and f->nextClusterNumber = %d \n", f->currentClusterNumber, f->nextClusterNumber);
-  
 	/* XXX add your code here */
+  
+  if (offset >= size) return -1;                          // If the offset is bigger than the size, we quit.
 
-	size_t len;
-	(void) fi;
-	if(strcmp(path, hello_path) != 0) {
-		return -ENOENT;
-	}
+  /********* TEST : Instead of using resolve **********/
+  uint32_t direntry_offset = 0x000FDC40;
+  pread(f->fs, &f->currentDirentry, sizeof(f->currentDirentry), direntry_offset);
+  f->nextClusterNumber = ((0xFFFF & f->currentDirentry.DIR_FstClusHI) << 16) | (0xFFFF & f->currentDirentry.DIR_FstClusLO);
+    f->currentClusterNumber = f->nextClusterNumber;
+  /********************** END *************************/
+  
+  int bytes_per_sector = f->boot_sector->BPB_BytsPerSec * f->boot_sector->BPB_SecPerClus;
+  
+  int to_read, last_round = 0;
+  int current_offset = 0;
+  int total_bytes_read = size;
+  
+  int buffer_offset = 0;
+  uint32_t dataStart;
+  while (!last_round && get_next_cluster_number() != -1) {
+    
+    dataStart = f->boot_sector->BPB_BytsPerSec * ComputeFirstSectorOfCluster(f->currentClusterNumber);
+    
+    // We can read everything we have to in this sector.
+    if (size + offset <= bytes_per_sector) {
+      to_read             = size - offset;
+      current_offset      = offset;
+      if (size + offset < bytes_per_sector) last_round = 1;
+    } else {
+      if (offset >= bytes_per_sector) {                     // If offset is bigger than 4096, we continue to the next block.
+        offset           -= bytes_per_sector;
+        continue;
+      } else {
+        if (size > bytes_per_sector) {
+          to_read         = bytes_per_sector - offset;
+          current_offset  = offset;
+          size           -= bytes_per_sector;
+          offset          = 0;
+        } else {
+          to_read         = bytes_per_sector - offset;
+          current_offset  = offset;
+          size           -= to_read;
+          offset          = 0;
+        }
+      }
+    }
+    
+    // TODO : Need to concatenate all the buffers into one big buffer!
+    //        Now we only have the last one to display!
+    pread(f->fs, buf, to_read, dataStart + current_offset);
+    printf("%s", buf);
+  }
 
-	len = strlen(hello_str);
-	if (offset < len) {
-		if (offset + size > len)
-			size = len - offset;
-		memcpy(buf, hello_str + offset, size);
-	} else
-		size = 0;
-
-	return size;
+	return total_bytes_read;
 }
 
 static int vfat_opt_args(void *data, const char *arg, int key, struct fuse_args *oargs) {
@@ -681,7 +701,7 @@ static void vfat_test_read_all() {
 				int count = 0;
 				while (!IS_EOC(cluster)) {
 					int clusterOffset = (bs->BPB_RsvdSecCnt * bs->BPB_BytsPerSec) + (cluster * sizeof(uint32_t));
-					int sectorOffset = bs->BPB_BytsPerSec * ComputeFirstSectorOfCluster(cluster) + 1;
+					int sectorOffset = bs->BPB_BytsPerSec * ComputeFirstSectorOfCluster(cluster);
 					printf("\t\t" "0x%08X\toffset : 0x%08X -> 0x%08X\n", cluster, clusterOffset, sectorOffset);
 					pread(f->fs, &cluster, sizeof(uint32_t), clusterOffset);
 					cluster &= 0x0FFFFFFF;
@@ -699,12 +719,6 @@ static void vfat_test_read_all() {
 		
 	} while (*firstByte != 0x0);
 	printf("\n**********************************************\n");
-	
-	// End of the program.
-	printf("\nFreeing the memory...\n");
-	// free(reservedSectors);
-	// free(fileAllocationTables);
-	free(f->boot_sector);
 }
 
 
