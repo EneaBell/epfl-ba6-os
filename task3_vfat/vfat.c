@@ -680,15 +680,6 @@ static void vfat_test_read_all() {
 
 int main(int argc, char **argv) {
 
-	// void split_path_file(char** p, char** f, char *pf) {
-
-	char* path[] = "/abc/def";
-	char* file[]
-	split_path_file(path, file);
-
-	return 0;
-	
-	/*
 	printf("Starting the program...\n");
 	
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -709,7 +700,6 @@ int main(int argc, char **argv) {
 	fflush(stdout);
 	
 	return fuse_main(args.argc, args.argv, &vfat_ops, NULL);
-	*/
 }
 
 /* ---------------------------------------------------------------------------
