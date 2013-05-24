@@ -1,20 +1,20 @@
 dest/:
 total 976K
+drwxr-xr-x 2 	 32K		BIGDIR
+drwxr-xr-x 2 	4.0K		long name sub
+drwxr-xr-x 2 	4.0K		SUB.DIR
 -rwxr-xr-x 1 	  10		1GOOD.JOB
 -rwxr-xr-x 1 	  10		2READ.ING
 -rwxr-xr-x 1 	   5		3THE
 -rwxr-xr-x 1 	   6		4DIR!
 -rwxr-xr-x 1 	  14		a shortR name
-drwxr-xr-x 2 	 32K		BIGDIR
 -rwxr-xr-x 1 	   0		EMPTY
 -rwxr-xr-x 1 	   0		emptyfile
 -rwxr-xr-x 1 	  16		hi
 -rwxr-xr-x 1 	449K		LARGE1
 -rwxr-xr-x 1 	449K		LARGE2
 -rwxr-xr-x 1 	  26		long filename with spaces
-drwxr-xr-x 2 	4.0K		long name sub
 -rwxr-xr-x 1 	4.0K		RAND.OM
-drwxr-xr-x 2 	4.0K		SUB.DIR
 
 dest/BIGDIR:
 total 2.0M
